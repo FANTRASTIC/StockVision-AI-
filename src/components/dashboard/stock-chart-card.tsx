@@ -17,10 +17,25 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { getStockData, allStocks, WatchlistItem } from '@/lib/data';
+import { allStocks } from '@/lib/data';
 import { ChartTooltipContent, ChartContainer, type ChartConfig } from '@/components/ui/chart';
 import { useState, useEffect, useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getDailyStockData } from '@/lib/services/alpha-vantage'; // Use the service directly
+import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+
+type CombinedData = {
+    date: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    rsi: number | null;
+    macd: number | null;
+    signal: number | null;
+    histogram: number | null;
+}
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -28,16 +43,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <div className="p-2 bg-card border border-border rounded-lg shadow-lg">
         <p className="font-bold text-card-foreground">{label}</p>
         <p className="text-sm text-muted-foreground">
-          Open: <span className="font-medium text-card-foreground">${payload[0]?.payload.open}</span>
+          Open: <span className="font-medium text-card-foreground">${payload[0]?.payload.open?.toFixed(2)}</span>
         </p>
         <p className="text-sm text-muted-foreground">
-          High: <span className="font-medium text-card-foreground">${payload[0]?.payload.high}</span>
+          High: <span className="font-medium text-card-foreground">${payload[0]?.payload.high?.toFixed(2)}</span>
         </p>
         <p className="text-sm text-muted-foreground">
-          Low: <span className="font-medium text-card-foreground">${payload[0]?.payload.low}</span>
+          Low: <span className="font-medium text-card-foreground">${payload[0]?.payload.low?.toFixed(2)}</span>
         </p>
         <p className="text-sm text-muted-foreground">
-          Close: <span className="font-medium text-card-foreground">${payload[0]?.payload.close}</span>
+          Close: <span className="font-medium text-card-foreground">${payload[0]?.payload.close?.toFixed(2)}</span>
         </p>
       </div>
     );
@@ -51,13 +66,14 @@ const Candlestick = (props: any) => {
   const { x, y, width, height, low, high, open, close } = props;
   const isGrowing = open < close;
   const color = isGrowing ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
+  
+  if (high === low) { // Avoid division by zero
+    return <g></g>;
+  }
 
-  const wickY = y + (height * (high - Math.max(open, close))) / (high-low);
-  const wickHeight = height * (Math.max(open, close) - Math.min(open, close))) / (high - low);
-  const bodyHeight = Math.max(1, Math.abs(open - close) / (high - low) * height);
-  const bodyY = isGrowing ? y + (height * (high - close)) / (high - low) : y + (height * (high - open)) / (high - low);
-
-
+  const bodyHeight = Math.max(1, (Math.abs(open - close) / (high - low)) * height);
+  const bodyY = isGrowing ? y + ((high - close) / (high - low)) * height : y + ((high - open) / (high - low)) * height;
+  
   return (
     <g>
       <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} stroke={color} />
@@ -87,18 +103,86 @@ const chartConfig = {
 
 export function StockChartCard() {
     const [selectedStock, setSelectedStock] = useState(allStocks[0]);
-    const [chartData, setChartData] = useState(getStockData(selectedStock.ticker));
+    const [chartData, setChartData] = useState<CombinedData[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const { toast } = useToast();
 
     useEffect(() => {
-        setChartData(getStockData(selectedStock.ticker));
-    }, [selectedStock]);
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const data = await getDailyStockData(selectedStock.ticker);
+                setChartData(data);
+            } catch (error) {
+                console.error(error);
+                toast({
+                    title: 'Error Fetching Stock Data',
+                    description: `Could not load data for ${selectedStock.ticker}. Please check your API key or try again later.`,
+                    variant: 'destructive'
+                });
+                setChartData([]); // Clear data on error
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    const lastDataPoint = chartData[chartData.length - 1];
-    const secondLastDataPoint = chartData[chartData.length - 2];
+        fetchData();
+    }, [selectedStock, toast]);
+    
+    const lastDataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+    const secondLastDataPoint = chartData.length > 1 ? chartData[chartData.length - 2] : null;
 
-    if (!lastDataPoint || !secondLastDataPoint) {
-        return <Card><CardHeader><CardTitle>Loading Chart...</CardTitle></CardHeader><CardContent><div className="h-[400px] flex items-center justify-center"><p>Loading data...</p></div></CardContent></Card>
+    const yDomain = useMemo(() => {
+        if (!chartData || chartData.length === 0) return [0, 100];
+        const prices = chartData.map(d => d.high).concat(chartData.map(d => d.low));
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        const padding = (maxPrice - minPrice) * 0.1; // 10% padding
+        return [minPrice - padding, maxPrice + padding];
+    }, [chartData]);
+
+
+    const renderContent = () => {
+        if (isLoading) {
+             return <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+        }
+        if (chartData.length === 0) {
+            return <div className="h-[400px] flex items-center justify-center"><p>No data available. The API limit might have been reached.</p></div>
+        }
+
+        return (
+            <ChartContainer config={chartConfig} className="h-[400px] w-full">
+                <div className="h-[70%] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
+                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(str) => str.substring(5)} />
+                        <YAxis domain={yDomain} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="close" shape={<Candlestick />} />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="h-[30%] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                            <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} hide/>
+                            <YAxis yAxisId="left" domain={[0, 100]} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false}/>
+                            <YAxis yAxisId="right" domain={['dataMin - 1', 'dataMax + 1']} orientation="right" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                            <Tooltip content={<ChartTooltipContent indicator="dot" />} />
+                            <Legend />
+                            <Line yAxisId="left" type="monotone" dataKey="rsi" stroke="var(--color-rsi)" dot={false} name="RSI" strokeWidth={1.5} />
+                            <Line yAxisId="right" type="monotone" dataKey="macd" stroke="var(--color-macd)" dot={false} name="MACD" strokeWidth={1.5} />
+                            <Line yAxisId="right" type="monotone" dataKey="signal" stroke="var(--color-signal)" dot={false} name="Signal" strokeWidth={1.5} />
+                            <Bar yAxisId="right" dataKey="histogram" fill="var(--color-histogram)" name="Histogram" />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+            </ChartContainer>
+        );
     }
+
 
   return (
     <Card>
@@ -120,45 +204,19 @@ export function StockChartCard() {
             </Select>
             <CardDescription>{selectedStock.name} Daily Chart</CardDescription>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold">${lastDataPoint.close.toFixed(2)}</p>
-            <p className={`text-sm ${lastDataPoint.close > secondLastDataPoint.close ? 'text-green-500' : 'text-red-500'}`}>
-              { (lastDataPoint.close - secondLastDataPoint.close).toFixed(2)} 
-              ({((lastDataPoint.close - secondLastDataPoint.close) / secondLastDataPoint.close * 100).toFixed(2)}%)
-            </p>
-          </div>
+           {lastDataPoint && secondLastDataPoint && (
+              <div className="text-right">
+                <p className="text-2xl font-bold">${lastDataPoint.close.toFixed(2)}</p>
+                <p className={`text-sm ${lastDataPoint.close > secondLastDataPoint.close ? 'text-green-500' : 'text-red-500'}`}>
+                  { (lastDataPoint.close - secondLastDataPoint.close).toFixed(2)} 
+                  ({((lastDataPoint.close - secondLastDataPoint.close) / secondLastDataPoint.close * 100).toFixed(2)}%)
+                </p>
+              </div>
+           )}
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[400px] w-full">
-            <div className="h-[70%] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
-                    <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(str) => str.substring(5)} />
-                    <YAxis domain={['dataMin - 10', 'dataMax + 10']} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="close" shape={<Candlestick />} />
-                    </ComposedChart>
-                </ResponsiveContainer>
-            </div>
-            <div className="h-[30%] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} hide/>
-                        <YAxis yAxisId="left" domain={[0, 100]} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false}/>
-                        <YAxis yAxisId="right" domain={['dataMin - 1', 'dataMax + 1']} orientation="right" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-                        <Tooltip content={<ChartTooltipContent indicator="dot" />} />
-                        <Legend />
-                        <Line yAxisId="left" type="monotone" dataKey="rsi" stroke="var(--color-rsi)" dot={false} name="RSI"/>
-                        <Line yAxisId="right" type="monotone" dataKey="macd" stroke="var(--color-macd)" dot={false} name="MACD"/>
-                        <Line yAxisId="right" type="monotone" dataKey="signal" stroke="var(--color-signal)" dot={false} name="Signal"/>
-                        <Bar yAxisId="right" dataKey="histogram" fill="var(--color-histogram)" name="Histogram" />
-                    </ComposedChart>
-                </ResponsiveContainer>
-            </div>
-        </ChartContainer>
+        {renderContent()}
       </CardContent>
     </Card>
   );
