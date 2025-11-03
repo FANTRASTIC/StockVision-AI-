@@ -106,18 +106,25 @@ export function StockChartCard() {
     const [chartData, setChartData] = useState<CombinedData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
+    const [apiError, setApiError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
+            setApiError(null);
             try {
                 const data = await getDailyStockData(selectedStock.ticker);
                 setChartData(data);
-            } catch (error) {
+            } catch (error: any) {
                 console.error(error);
+                let description = `Could not load data for ${selectedStock.ticker}. Please check your API key or try again later.`;
+                if (error.message && error.message.includes('limit')) {
+                    description = `Alpha Vantage API limit reached. Please wait a moment or upgrade your key.`
+                    setApiError(description);
+                }
                 toast({
                     title: 'Error Fetching Stock Data',
-                    description: `Could not load data for ${selectedStock.ticker}. Please check your API key or try again later.`,
+                    description: description,
                     variant: 'destructive'
                 });
                 setChartData([]); // Clear data on error
@@ -147,7 +154,7 @@ export function StockChartCard() {
              return <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
         }
         if (chartData.length === 0) {
-            return <div className="h-[400px] flex items-center justify-center"><p>No data available. The API limit might have been reached.</p></div>
+            return <div className="h-[400px] flex items-center justify-center text-center"><p className="text-destructive">{apiError || "No data available. The API might be unavailable."}</p></div>
         }
 
         return (
