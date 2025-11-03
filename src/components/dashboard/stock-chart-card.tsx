@@ -3,12 +3,12 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import {
   ComposedChart,
-  Bar,
   Line,
   XAxis,
   YAxis,
@@ -16,14 +16,16 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Area,
 } from 'recharts';
 import { allStocks } from '@/lib/data';
 import { ChartTooltipContent, ChartContainer, type ChartConfig } from '@/components/ui/chart';
-import { useState, useEffect, useMemo } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getDailyStockData } from '@/lib/services/alpha-vantage'; // Use the service directly
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { getDailyStockData } from '@/lib/services/alpha-vantage';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { cn, toNum } from '@/lib/utils';
 
 type CombinedData = {
     date: string;
@@ -37,114 +39,98 @@ type CombinedData = {
     histogram: number | null;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="p-2 bg-card border border-border rounded-lg shadow-lg">
-        <p className="font-bold text-card-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground">
-          Open: <span className="font-medium text-card-foreground">${payload[0]?.payload.open?.toFixed(2)}</span>
-        </p>
-        <p className="text-sm text-muted-foreground">
-          High: <span className="font-medium text-card-foreground">${payload[0]?.payload.high?.toFixed(2)}</span>
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Low: <span className="font-medium text-card-foreground">${payload[0]?.payload.low?.toFixed(2)}</span>
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Close: <span className="font-medium text-card-foreground">${payload[0]?.payload.close?.toFixed(2)}</span>
-        </p>
-      </div>
-    );
-  }
-
-  return null;
-};
-
-
-const Candlestick = (props: any) => {
-  const { x, y, width, height, low, high, open, close } = props;
-  const isGrowing = open < close;
-  const color = isGrowing ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
-  
-  if (high === low) { // Avoid division by zero
-    return <g></g>;
-  }
-
-  const bodyHeight = Math.max(1, (Math.abs(open - close) / (high - low)) * height);
-  const bodyY = isGrowing ? y + ((high - close) / (high - low)) * height : y + ((high - open) / (high - low)) * height;
-  
-  return (
-    <g>
-      <line x1={x + width / 2} y1={y} x2={x + width / 2} y2={y + height} stroke={color} />
-      <rect x={x} y={bodyY} width={width} height={bodyHeight} fill={color} />
-    </g>
-  );
-};
-
 const chartConfig = {
+  close: {
+    label: "Price",
+    color: "hsl(var(--chart-1))",
+  },
   rsi: {
     label: "RSI",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-2))",
   },
   macd: {
     label: "MACD",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-3))",
   },
   signal: {
     label: "Signal",
     color: "hsl(var(--chart-4))",
   },
-  histogram: {
-    label: "Histogram",
-    color: "hsl(var(--muted))",
-  },
-} satisfies ChartConfig
+} satisfies ChartConfig;
+
+const timeRanges = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'Max'];
 
 export function StockChartCard() {
-    const [selectedStock, setSelectedStock] = useState(allStocks[0]);
+    const [selectedTicker, setSelectedTicker] = useState(allStocks[0].ticker);
     const [chartData, setChartData] = useState<CombinedData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
     const [apiError, setApiError] = useState<string | null>(null);
+    const [activeRange, setActiveRange] = useState('1M');
+
+    const selectedStock = useMemo(() => allStocks.find(s => s.ticker === selectedTicker)!, [selectedTicker]);
+
+    const fetchData = useCallback(async (ticker: string, range: string) => {
+        setIsLoading(true);
+        setApiError(null);
+        setChartData([]);
+        try {
+            const data = await getDailyStockData(ticker, range);
+            setChartData(data);
+        } catch (error: any) {
+            console.error(error);
+            let description = error.message || `Could not load data for ${ticker}. Please check your API key or try again later.`;
+            if (error.message && error.message.includes('limit')) {
+                description = `API rate limit reached. Please wait a moment.`;
+            }
+            setApiError(description);
+            toast({
+                title: 'Error Fetching Stock Data',
+                description: description,
+                variant: 'destructive'
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            setApiError(null);
-            setChartData([]);
-            try {
-                const data = await getDailyStockData(selectedStock.ticker);
-                setChartData(data);
-            } catch (error: any) {
-                console.error(error);
-                let description = `Could not load data for ${selectedStock.ticker}. Please check your API key or try again later.`;
-                if (error.message && error.message.includes('limit')) {
-                    description = `Alpha Vantage API limit reached. Please wait a moment or upgrade your key.`
-                }
-                setApiError(description);
-                toast({
-                    title: 'Error Fetching Stock Data',
-                    description: description,
-                    variant: 'destructive'
-                });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchData();
-    }, [selectedStock, toast]);
+        fetchData(selectedTicker, activeRange);
+    }, [selectedTicker, activeRange, fetchData]);
     
-    const lastDataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
-    const secondLastDataPoint = chartData.length > 1 ? chartData[chartData.length - 2] : null;
+    const { lastDataPoint, secondLastDataPoint, price, priceChange, priceChangePercent, afterHoursPrice, afterHoursChange, afterHoursChangePercent } = useMemo(() => {
+        const last = chartData?.at(-1);
+        const secondLast = chartData?.at(-2);
+        
+        const priceNum = toNum(last?.close);
+        const priceChangeNum = priceNum - toNum(secondLast?.close);
+        const priceChangePercentNum = toNum(secondLast?.close) === 0 ? 0 : (priceChangeNum / toNum(secondLast?.close)) * 100;
+        
+        // Mock after-hours data
+        const afterHoursChangeNum = (Math.random() - 0.5) * (priceNum * 0.005);
+        const afterHoursPriceNum = priceNum + afterHoursChangeNum;
+        const afterHoursChangePercentNum = (afterHoursChangeNum / priceNum) * 100;
+
+
+        return {
+            lastDataPoint: last,
+            secondLastDataPoint: secondLast,
+            price: priceNum,
+            priceChange: priceChangeNum,
+            priceChangePercent: priceChangePercentNum,
+            afterHoursPrice: afterHoursPriceNum,
+            afterHoursChange: afterHoursChangeNum,
+            afterHoursChangePercent: afterHoursChangePercentNum,
+        };
+    }, [chartData]);
+
 
     const yDomain = useMemo(() => {
         if (!chartData || chartData.length === 0) return [0, 100];
         const prices = chartData.map(d => d.high).concat(chartData.map(d => d.low));
         const minPrice = Math.min(...prices);
         const maxPrice = Math.max(...prices);
-        const padding = (maxPrice - minPrice) * 0.1; // 10% padding
+        const padding = (maxPrice - minPrice) * 0.1;
         return [minPrice - padding, maxPrice + padding];
     }, [chartData]);
 
@@ -153,42 +139,57 @@ export function StockChartCard() {
         if (isLoading) {
              return <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
         }
-        if (apiError || chartData.length === 0) {
+        if (apiError || !chartData || chartData.length === 0) {
             return <div className="h-[400px] flex items-center justify-center text-center"><p className="text-destructive">{apiError || "No data available. The API might be unavailable."}</p></div>
         }
 
         return (
             <ChartContainer config={chartConfig} className="h-[400px] w-full">
-                <div className="h-[70%] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
-                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(str) => str.substring(5)} />
-                        <YAxis domain={yDomain} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="close" shape={<Candlestick />} />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </div>
-                <div className="h-[30%] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                            <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} hide/>
-                            <YAxis yAxisId="left" domain={[0, 100]} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false}/>
-                            <YAxis yAxisId="right" domain={['dataMin - 1', 'dataMax + 1']} orientation="right" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-                            <Tooltip content={<ChartTooltipContent indicator="dot" />} />
-                            <Legend />
-                            <Line yAxisId="left" type="monotone" dataKey="rsi" stroke="var(--color-rsi)" dot={false} name="RSI" strokeWidth={1.5} />
-                            <Line yAxisId="right" type="monotone" dataKey="macd" stroke="var(--color-macd)" dot={false} name="MACD" strokeWidth={1.5} />
-                            <Line yAxisId="right" type="monotone" dataKey="signal" stroke="var(--color-signal)" dot={false} name="Signal" strokeWidth={1.5} />
-                            <Bar yAxisId="right" dataKey="histogram" fill="var(--color-histogram)" name="Histogram" />
-                        </ComposedChart>
-                    </ResponsiveContainer>
-                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
+                    <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(str) => str.substring(5)} />
+                    <YAxis domain={yDomain} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<ChartTooltipContent indicator="dot" />} />
+                    <Legend />
+                    <defs>
+                        <linearGradient id="fillPrice" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                            offset="5%"
+                            stopColor={priceChange >= 0 ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'}
+                            stopOpacity={0.4}
+                        />
+                        <stop
+                            offset="95%"
+                             stopColor={priceChange >= 0 ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'}
+                            stopOpacity={0.05}
+                        />
+                        </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="close" stroke={priceChange >= 0 ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'} fill="url(#fillPrice)" name="Price" strokeWidth={2} />
+                    </ComposedChart>
+                </ResponsiveContainer>
             </ChartContainer>
         );
     }
+    
+    const keyMetrics = useMemo(() => {
+        if (!chartData || chartData.length === 0) {
+            return {
+                open: 0, high: 0, low: 0, mktCap: 'N/A',
+                peRatio: 'N/A', divYield: 'N/A', prevClose: 0,
+            };
+        }
+        return {
+            open: lastDataPoint?.open,
+            high: Math.max(...chartData.map(d => d.high)),
+            low: Math.min(...chartData.map(d => d.low)),
+            mktCap: (Math.random() * 2 + 1).toFixed(2) + 'T',
+            peRatio: (Math.random() * 20 + 15).toFixed(2),
+            divYield: (Math.random() * 2).toFixed(2) + '%',
+            prevClose: secondLastDataPoint?.close,
+        }
+    }, [chartData, lastDataPoint, secondLastDataPoint]);
 
 
   return (
@@ -196,35 +197,43 @@ export function StockChartCard() {
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-             <Select value={selectedStock.ticker} onValueChange={(ticker) => setSelectedStock(allStocks.find(s => s.ticker === ticker)!)}>
-                <SelectTrigger className="w-[200px] border-0 shadow-none text-2xl font-headline !p-0 focus:ring-0 focus:ring-offset-0 h-auto">
-                    <SelectValue placeholder="Select stock" />
-                </SelectTrigger>
-                <SelectContent>
-                    {allStocks.map(stock => (
-                        <SelectItem key={stock.ticker} value={stock.ticker}>
-                            <span className="font-bold">{stock.ticker}</span>
-                            <span className="text-muted-foreground ml-2">{stock.name}</span>
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-            <CardDescription>{selectedStock.name} Daily Chart</CardDescription>
-          </div>
-           {lastDataPoint && secondLastDataPoint && (
-              <div className="text-right">
-                <p className="text-2xl font-bold">${lastDataPoint.close.toFixed(2)}</p>
-                <p className={`text-sm ${lastDataPoint.close > secondLastDataPoint.close ? 'text-green-500' : 'text-red-500'}`}>
-                  { (lastDataPoint.close - secondLastDataPoint.close).toFixed(2)} 
-                  ({((lastDataPoint.close - secondLastDataPoint.close) / secondLastDataPoint.close * 100).toFixed(2)}%)
+             <CardDescription>Market Summary &gt; {selectedStock.name}</CardDescription>
+             <div className="flex items-end gap-2 mt-1">
+                <p className="text-3xl font-bold">${price.toFixed(2)}</p>
+                <p className={`text-lg font-semibold ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {priceChange >= 0 ? '+' : ''}{(priceChange).toFixed(2)} 
+                  ({priceChangePercent.toFixed(2)}%)
                 </p>
-              </div>
-           )}
+             </div>
+             <div className="text-xs text-muted-foreground mt-1">
+                <span>Closed: {new Date().toLocaleString()}</span>
+                <span className="ml-4">After hours: ${afterHoursPrice.toFixed(2)} <span className={afterHoursChange >=0 ? 'text-green-500' : 'text-red-500'}>{afterHoursChange.toFixed(2)} ({afterHoursChangePercent.toFixed(2)}%)</span></span>
+             </div>
+          </div>
+           <Button variant="outline">+ Follow</Button>
         </div>
       </CardHeader>
-      <CardContent>
-        {renderContent()}
+      <CardContent className="p-0">
+         <div className="px-6 border-b">
+            {timeRanges.map(range => (
+                <Button key={range} variant="ghost" size="sm" className={cn("rounded-none", activeRange === range && 'border-b-2 border-primary text-primary')} onClick={() => setActiveRange(range)}>
+                    {range}
+                </Button>
+            ))}
+        </div>
+        <div className="p-6">
+            {renderContent()}
+        </div>
       </CardContent>
+      <CardFooter className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm px-6 pt-4 pb-6 border-t">
+        <div className="flex justify-between"><span className="text-muted-foreground">Open</span> <span className="font-medium">{keyMetrics.open?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Mkt cap</span> <span className="font-medium">{keyMetrics.mktCap}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">High</span> <span className="font-medium">{keyMetrics.high?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">P/E ratio</span> <span className="font-medium">{keyMetrics.peRatio}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Low</span> <span className="font-medium">{keyMetrics.low?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Div yield</span> <span className="font-medium">{keyMetrics.divYield}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Prev. close</span> <span className="font-medium">{keyMetrics.prevClose?.toFixed(2)}</span></div>
+      </CardFooter>
     </Card>
   );
 }

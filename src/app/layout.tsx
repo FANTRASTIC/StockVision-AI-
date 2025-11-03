@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
 
 export const metadata: Metadata = {
   title: 'StockWise AI',
@@ -25,7 +27,9 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('font-body antialiased')}>
-        {children}
+        <TooltipProvider>
+            {children}
+        </TooltipProvider>
         <Toaster />
       </body>
     </html>
