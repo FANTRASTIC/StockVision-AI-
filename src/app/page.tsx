@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState, useEffect } from "react";
@@ -157,7 +158,7 @@ export default function StockVisionDashboard() {
     }
   }
   
-  const currentPrice = data[data.length-1]?.close ?? 0;
+  const currentPrice = data.length > 0 ? data[data.length - 1]?.close ?? 0 : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
