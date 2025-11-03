@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Card,
@@ -67,6 +68,11 @@ export function StockChartCard() {
     const { toast } = useToast();
     const [apiError, setApiError] = useState<string | null>(null);
     const [activeRange, setActiveRange] = useState('1M');
+    const [currentDate, setCurrentDate] = useState('');
+
+    useEffect(() => {
+        setCurrentDate(new Date().toLocaleString());
+    }, []);
 
     const selectedStock = useMemo(() => allStocks.find(s => s.ticker === selectedTicker)!, [selectedTicker]);
 
@@ -206,7 +212,7 @@ export function StockChartCard() {
                 </p>
              </div>
              <div className="text-xs text-muted-foreground mt-1">
-                <span>Closed: {new Date().toLocaleString()}</span>
+                {currentDate && <span>Closed: {currentDate}</span>}
                 <span className="ml-4">After hours: ${afterHoursPrice.toFixed(2)} <span className={afterHoursChange >=0 ? 'text-green-500' : 'text-red-500'}>{afterHoursChange.toFixed(2)} ({afterHoursChangePercent.toFixed(2)}%)</span></span>
              </div>
           </div>
@@ -237,3 +243,5 @@ export function StockChartCard() {
     </Card>
   );
 }
+
+    
