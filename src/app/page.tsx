@@ -44,7 +44,7 @@ import {
 
 // shadcn/ui components (available in this environment)
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -304,10 +304,28 @@ function ControlPanel({ showMA50, setShowMA50, showMA200, setShowMA200 }) {
 function StockChart({ data, isLoading, showMA50, showMA200 }) {
   const chartData = useMemo(() => data, [data]);
 
+  const lastDataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+  const price = lastDataPoint ? lastDataPoint.close : 0;
+  const priceChange = chartData.length > 1 ? chartData[chartData.length - 1].close - chartData[chartData.length - 2].close : 0;
+  const isPositive = priceChange >= 0;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Price Chart</CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Price Chart</CardTitle>
+            <CardDescription>Daily price history</CardDescription>
+          </div>
+          {lastDataPoint && (
+            <div className="text-right">
+              <p className="text-2xl font-bold">${price.toFixed(2)}</p>
+              <p className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{(priceChange / (price - priceChange) * 100).toFixed(2)}%)
+              </p>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="h-[400px] pr-0">
         <ResponsiveContainer width="100%" height="100%">
