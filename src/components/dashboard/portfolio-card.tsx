@@ -1,3 +1,5 @@
+
+'use client';
 import {
   Card,
   CardContent,
@@ -13,14 +15,56 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { portfolioHoldings } from '@/lib/data';
+import { portfolioHoldings, type PortfolioHolding } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from 'react';
+
+// Simple pseudo-random number generator to ensure consistency between server and client
+const seededRandom = (seed: number) => {
+  let s = Math.sin(seed) * 10000;
+  return s - Math.floor(s);
+};
+
+
+const generateDayGains = (holdings: PortfolioHolding[]) => {
+    return holdings.map((holding, index) => {
+        const seed = index + 1; // Simple seed based on index
+        const dayGain = (seededRandom(seed) - 0.5) * 5 * holding.shares;
+        const marketValue = holding.shares * holding.currentPrice;
+        const dayGainPercent = (dayGain / (marketValue - dayGain)) * 100;
+        return {
+            dayGain,
+            dayGainPercent
+        };
+    });
+};
+
 
 export function PortfolioCard() {
+  const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>([]);
+
+  useEffect(() => {
+    setDayGains(generateDayGains(portfolioHoldings));
+  }, []);
+
   const totalValue = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.currentPrice, 0);
   const totalCost = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.avgCost, 0);
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = (totalGainLoss / totalCost) * 100;
+
+  if (dayGains.length === 0) {
+      return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline">Paper Trading Portfolio</CardTitle>
+                <CardDescription>Your virtual holdings with real-time data.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p>Loading portfolio...</p>
+            </CardContent>
+        </Card>
+      )
+  }
 
   return (
     <Card>
@@ -52,13 +96,11 @@ export function PortfolioCard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {portfolioHoldings.map((holding) => {
+            {portfolioHoldings.map((holding, index) => {
               const marketValue = holding.shares * holding.currentPrice;
               const totalGain = marketValue - holding.shares * holding.avgCost;
               const gainPercent = (totalGain / (holding.shares * holding.avgCost)) * 100;
-              // Mock day's gain for demonstration
-              const dayGain = (Math.random() - 0.5) * 5 * holding.shares; 
-              const dayGainPercent = (dayGain / (marketValue - dayGain)) * 100;
+              const {dayGain, dayGainPercent} = dayGains[index] || { dayGain: 0, dayGainPercent: 0};
 
               return (
                 <TableRow key={holding.ticker}>

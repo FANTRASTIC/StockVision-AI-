@@ -36,6 +36,13 @@ export type CandlestickData = {
   close: number;
 };
 
+// Simple pseudo-random number generator to ensure consistency between server and client
+const seededRandom = (seed: number) => {
+  let s = Math.sin(seed) * 10000;
+  return s - Math.floor(s);
+};
+
+
 // Generate more realistic random walk data
 const generateCandlestickData = (count: number, startDate: Date, initialPrice: number): CandlestickData[] => {
   const data: CandlestickData[] = [];
@@ -43,10 +50,11 @@ const generateCandlestickData = (count: number, startDate: Date, initialPrice: n
   let lastClose = initialPrice;
 
   for (let i = 0; i < count; i++) {
-    const open = parseFloat((lastClose * (1 + (Math.random() - 0.49) * 0.05)).toFixed(2));
-    const close = parseFloat((open * (1 + (Math.random() - 0.5) * 0.06)).toFixed(2));
-    const high = parseFloat(Math.max(open, close, open * (1 + Math.random() * 0.03), close * (1 + Math.random() * 0.02)).toFixed(2));
-    const low = parseFloat(Math.min(open, close, open * (1 - Math.random() * 0.03), close * (1 - Math.random() * 0.02)).toFixed(2));
+    const seed = i + 1;
+    const open = parseFloat((lastClose * (1 + (seededRandom(seed * 10) - 0.49) * 0.05)).toFixed(2));
+    const close = parseFloat((open * (1 + (seededRandom(seed * 20) - 0.5) * 0.06)).toFixed(2));
+    const high = parseFloat(Math.max(open, close, open * (1 + seededRandom(seed * 30) * 0.03), close * (1 + seededRandom(seed * 40) * 0.02)).toFixed(2));
+    const low = parseFloat(Math.min(open, close, open * (1 - seededRandom(seed * 50) * 0.03), close * (1 - seededRandom(seed * 60) * 0.02)).toFixed(2));
     
     data.push({
       date: currentDate.toISOString().split('T')[0],
