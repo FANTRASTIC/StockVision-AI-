@@ -28,8 +28,8 @@ export const getStockDataTool = ai.defineTool(
         histogram: z.number().nullable(),
     })),
   },
-  async (input) => {
-    console.log(`Fetching daily stock data for ${input.ticker}`);
-    return getDailyStockData(input.ticker, input.outputSize);
+  async ({ticker, outputSize}) => {
+    console.log(`Fetching daily stock data for ${ticker} via internal API`);
+    return getDailyStockData(ticker, outputSize);
   }
 );
