@@ -11,6 +11,8 @@ export const portfolioHoldings: PortfolioHolding[] = [
   { ticker: 'GOOGL', name: 'Alphabet Inc.', shares: 5.2, avgCost: 155.6, currentPrice: 179.63 },
   { ticker: 'TSLA', name: 'Tesla, Inc.', shares: 15.0, avgCost: 200.45, currentPrice: 183.01 },
   { ticker: 'AMZN', name: 'Amazon.com, Inc.', shares: 7.8, avgCost: 180.22, currentPrice: 185.57 },
+  { ticker: 'NVDA', name: 'NVIDIA Corporation', shares: 25.0, avgCost: 105.50, currentPrice: 120.91 },
+  { ticker: 'MSFT', name: 'Microsoft Corporation', shares: 12.0, avgCost: 400.10, currentPrice: 449.78 },
 ];
 
 export type WatchlistItem = {
@@ -26,6 +28,8 @@ export const watchlist: WatchlistItem[] = [
   { ticker: 'MSFT', name: 'Microsoft Corporation', price: 449.78, change: 2.11, changePercent: 0.47 },
   { ticker: 'META', name: 'Meta Platforms, Inc.', price: 509.84, change: 11.23, changePercent: 2.25 },
   { ticker: 'JPM', name: 'JPMorgan Chase & Co.', price: 198.88, change: -1.02, changePercent: -0.51 },
+  { ticker: 'V', name: 'Visa Inc.', price: 275.98, change: 1.50, changePercent: 0.55},
+  { ticker: 'WMT', name: 'Walmart Inc.', price: 67.50, change: -0.25, changePercent: -0.37}
 ];
 
 export type CandlestickData = {
@@ -70,7 +74,30 @@ const generateCandlestickData = (count: number, startDate: Date, initialPrice: n
   return data;
 };
 
-export const candlestickData: CandlestickData[] = generateCandlestickData(100, new Date('2023-01-01'), 150);
+export const allStocks = [
+    ...portfolioHoldings.map(s => ({ ticker: s.ticker, name: s.name, price: s.currentPrice})),
+    ...watchlist.map(s => ({ ticker: s.ticker, name: s.name, price: s.price})),
+].filter((value, index, self) =>
+  index === self.findIndex((t) => (
+    t.ticker === value.ticker
+  ))
+)
+
+
+export const getStockData = (ticker: string) => {
+    const stock = allStocks.find(s => s.ticker === ticker);
+    const price = stock ? stock.price : 150;
+    const candlestickData: CandlestickData[] = generateCandlestickData(100, new Date('2023-01-01'), price);
+    const rsiData = calculateRSI(candlestickData);
+    const macdData = calculateMACD(candlestickData);
+
+    return candlestickData.map((d, i) => ({
+        ...d,
+        ...rsiData[i],
+        ...macdData[i],
+    }));
+}
+
 
 // Generate RSI and MACD data based on candlestick data
 const calculateRSI = (data: CandlestickData[], period = 14) => {
@@ -106,6 +133,7 @@ const calculateRSI = (data: CandlestickData[], period = 14) => {
 };
 
 const calculateEMA = (data: number[], period: number) => {
+  if (data.length === 0) return [];
   const k = 2 / (period + 1);
   const emaArray = [data[0]];
   for (let i = 1; i < data.length; i++) {
@@ -115,6 +143,7 @@ const calculateEMA = (data: number[], period: number) => {
 };
 
 const calculateMACD = (data: CandlestickData[], shortPeriod = 12, longPeriod = 26, signalPeriod = 9) => {
+  if (data.length === 0) return [];
   const closes = data.map(d => d.close);
   const emaShort = calculateEMA(closes, shortPeriod);
   const emaLong = calculateEMA(closes, longPeriod);
@@ -125,17 +154,8 @@ const calculateMACD = (data: CandlestickData[], shortPeriod = 12, longPeriod = 2
 
   return data.map((d, i) => ({
     date: d.date,
-    macd: parseFloat(macdLine[i].toFixed(2)),
-    signal: parseFloat(signalLine[i].toFixed(2)),
-    histogram: parseFloat(histogram[i].toFixed(2)),
+    macd: parseFloat((macdLine[i] || 0).toFixed(2)),
+    signal: parseFloat((signalLine[i] || 0).toFixed(2)),
+    histogram: parseFloat((histogram[i] || 0).toFixed(2)),
   }));
 };
-
-export const rsiData = calculateRSI(candlestickData);
-export const macdData = calculateMACD(candlestickData);
-
-export const combinedChartData = candlestickData.map((d, i) => ({
-  ...d,
-  ...rsiData[i],
-  ...macdData[i],
-}));
