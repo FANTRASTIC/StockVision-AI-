@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { portfolioHoldings, type PortfolioHolding } from '@/lib/data';
 import { useState, useEffect } from 'react';
+import { toNum } from '@/lib/utils';
 
 // Simple pseudo-random number generator to ensure consistency between server and client
 const seededRandom = (seed: number) => {
@@ -28,9 +29,11 @@ const seededRandom = (seed: number) => {
 const generateDayGains = (holdings: PortfolioHolding[]) => {
     return holdings.map((holding, index) => {
         const seed = index + 1; // Simple seed based on index
-        const dayGain = (seededRandom(seed) - 0.5) * 5 * holding.shares;
-        const marketValue = holding.shares * holding.price;
-        const dayGainPercent = (dayGain / (marketValue - dayGain)) * 100;
+        const price = toNum(holding.price);
+        const shares = toNum(holding.shares);
+        const dayGain = (seededRandom(seed) - 0.5) * 5 * shares;
+        const marketValue = shares * price;
+        const dayGainPercent = (marketValue - dayGain) !== 0 ? (dayGain / (marketValue - dayGain)) * 100 : 0;
         return {
             dayGain,
             dayGainPercent
@@ -47,10 +50,10 @@ export function PortfolioCard() {
     setDayGains(generateDayGains(portfolioHoldings));
   }, []);
 
-  const totalValue = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.price, 0);
-  const totalCost = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.avgCost, 0);
+  const totalValue = portfolioHoldings.reduce((acc, holding) => acc + toNum(holding.shares) * toNum(holding.price), 0);
+  const totalCost = portfolioHoldings.reduce((acc, holding) => acc + toNum(holding.shares) * toNum(holding.avgCost), 0);
   const totalGainLoss = totalValue - totalCost;
-  const totalGainLossPercent = (totalGainLoss / totalCost) * 100;
+  const totalGainLossPercent = totalCost !== 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
   if (dayGains.length === 0) {
       return (
@@ -66,6 +69,9 @@ export function PortfolioCard() {
       )
   }
 
+  const fmt = (n: number, d = 2) =>
+    n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+
   return (
     <Card>
       <CardHeader>
@@ -75,9 +81,9 @@ export function PortfolioCard() {
                 <CardDescription>Your virtual holdings with real-time data.</CardDescription>
             </div>
             <div className="text-right">
-                <p className="text-2xl font-bold">${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p className="text-2xl font-bold">${fmt(totalValue)}</p>
                 <p className={`text-sm ${totalGainLoss >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {totalGainLoss >= 0 ? '+' : ''}${totalGainLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {totalGainLoss >= 0 ? '+' : ''}${fmt(totalGainLoss)}
                     ({totalGainLossPercent.toFixed(2)}%)
                 </p>
             </div>
@@ -97,9 +103,14 @@ export function PortfolioCard() {
           </TableHeader>
           <TableBody>
             {portfolioHoldings.map((holding, index) => {
-              const marketValue = holding.shares * holding.price;
-              const totalGain = marketValue - holding.shares * holding.avgCost;
-              const gainPercent = (totalGain / (holding.shares * holding.avgCost)) * 100;
+              const shares = toNum(holding.shares);
+              const price = toNum(holding.price);
+              const avgCost = toNum(holding.avgCost);
+              
+              const marketValue = shares * price;
+              const totalGain = marketValue - shares * avgCost;
+              const costBasis = shares * avgCost;
+              const gainPercent = costBasis !== 0 ? (totalGain / costBasis) * 100 : 0;
               const {dayGain, dayGainPercent} = dayGains[index] || { dayGain: 0, dayGainPercent: 0};
 
               return (
@@ -108,15 +119,15 @@ export function PortfolioCard() {
                     <div className="font-bold">{holding.ticker}</div>
                     <div className="text-xs text-muted-foreground">{holding.name}</div>
                   </TableCell>
-                  <TableCell className="text-right">{holding.shares.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${holding.price.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">${marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right">{fmt(shares)}</TableCell>
+                  <TableCell className="text-right">${fmt(price)}</TableCell>
+                  <TableCell className="text-right">${fmt(marketValue)}</TableCell>
                   <TableCell className={`text-right ${dayGain >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    <div>{dayGain >= 0 ? '+' : ''}${dayGain.toFixed(2)}</div>
+                    <div>{dayGain >= 0 ? '+' : ''}${fmt(dayGain)}</div>
                     <div className="text-xs">({dayGainPercent.toFixed(2)}%)</div>
                   </TableCell>
                   <TableCell className={`text-right ${totalGain >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    <div>{totalGain >= 0 ? '+' : ''}${totalGain.toFixed(2)}</div>
+                    <div>{totalGain >= 0 ? '+' : ''}${fmt(totalGain)}</div>
                     <div className="text-xs">({gainPercent.toFixed(2)}%)</div>
                   </TableCell>
                 </TableRow>
