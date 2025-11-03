@@ -1,13 +1,28 @@
 
 'use client';
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+  Legend,
+  CartesianGrid,
+  Bar,
+  BarChart,
+} from "recharts";
 import {
   Search,
   Settings,
   Moon,
   Sun,
   Bell,
+  ChevronDown,
   Plus,
   Play,
   StopCircle,
@@ -20,12 +35,14 @@ import {
   Newspaper,
   Layers,
   SlidersHorizontal,
+  Filter,
   RefreshCw,
   GitBranch,
   Info,
+  Loader2
 } from "lucide-react";
 
-// shadcn/ui components
+// shadcn/ui components (available in this environment)
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,367 +57,327 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
-// Custom components
-import { StatCard } from "@/components/dashboard/stat-card";
-import { ComposedStockChart } from "@/components/dashboard/composed-stock-chart";
+// --- Data Fetching and Processing ---
 
-// Services and AI Flows
-import { getDailyStockData } from "@/lib/services/alpha-vantage";
-import { stockPriceForecast, StockPriceForecastOutput } from "@/ai/flows/stock-price-forecast";
-import { analyzeMarketSentiment, MarketSentimentOutput } from "@/ai/flows/real-time-market-sentiment";
-import { useToast } from "@/hooks/use-toast";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { allStocks } from "@/lib/data";
+type OHLCData = {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ma50?: number;
+  ma200?: number;
+  forecast?: number;
+};
 
-const models = [
-  { key: "lstm", label: "LSTM (Neural)" },
-  { key: "prophet", label: "Prophet (Additive)" },
-  { key: "arima", label: "ARIMA" },
-  { key: "rf", label: "Random Forest" },
-  { key: "xgb", label: "XGBoost" },
-];
+// Mock Data Generator
+function generateMockSeries(days = 120): OHLCData[] {
+  let price = 150;
+  const out: OHLCData[] = [];
+  for (let i = days; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const change = (Math.random() - 0.5) * 2.5;
+    price = Math.max(50, price + change);
+    out.push({
+      date: d.toISOString().slice(0, 10),
+      open: price - (Math.random() - 0.5),
+      high: price + Math.random(),
+      low: price - Math.random(),
+      close: Number(price.toFixed(2)),
+      volume: Math.round(2_000_000 + Math.random() * 4_000_000),
+    });
+  }
+  return addMovingAverages(out);
+}
 
+// Moving Averages Calculator
+function addMovingAverages(data: OHLCData[]): OHLCData[] {
+  return data.map((pt, idx) => {
+    let ma50, ma200;
+    if (idx >= 49) {
+      const slice = data.slice(idx - 49, idx + 1);
+      ma50 = Number((slice.reduce((a, b) => a + b.close, 0) / 50).toFixed(2));
+    }
+    if (idx >= 199) {
+      const slice = data.slice(idx - 199, idx + 1);
+      ma200 = Number((slice.reduce((a, b) => a + b.close, 0) / 200).toFixed(2));
+    }
+    return { ...pt, ma50, ma200 };
+  });
+}
+
+// --- API Fetchers ---
+// These now call our internal Next.js API routes
+
+async function fetchYahooDaily(symbol: string): Promise<OHLCData[]> {
+    const res = await fetch(`/api/yahoo?symbol=${encodeURIComponent(symbol)}`);
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || `Yahoo API request failed`);
+    }
+    const data = await res.json();
+    return addMovingAverages(data);
+}
+
+async function fetchAlphaVantageDaily(symbol: string): Promise<OHLCData[]> {
+    const res = await fetch(`/api/alpha?symbol=${encodeURIComponent(symbol)}`);
+    if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || `Alpha Vantage API request failed`);
+    }
+    const data = await res.json();
+    return addMovingAverages(data);
+}
+
+const fetchers = {
+  mock: generateMockSeries,
+  yahoo: fetchYahooDaily,
+  alpha: fetchAlphaVantageDaily,
+};
+
+type Provider = keyof typeof fetchers;
+
+// Main Dashboard Component
 export default function StockVisionDashboard() {
   const [dark, setDark] = useState(true);
   const [symbol, setSymbol] = useState("AAPL");
-  const [watchlist, setWatchlist] = useState(["AAPL", "MSFT", "NVDA", "GOOGL"]);
-  const [data, setData] = useState<any[]>([]);
+  const [provider, setProvider] = useState<Provider>("yahoo");
+
+  const [data, setData] = useState<OHLCData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [showMA50, setShowMA50] = useState(true);
   const [showMA200, setShowMA200] = useState(false);
-  const [showForecast, setShowForecast] = useState(true);
-  const [model, setModel] = useState("lstm");
-  const [horizon, setHorizon] = useState(7);
-  const [split, setSplit] = useState(80);
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [forecast, setForecast] = useState<StockPriceForecastOutput['forecast']>([]);
-  const [sentiment, setSentiment] = useState<MarketSentimentOutput | null>(null);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const stockData = await getDailyStockData(symbol, 'full');
-        setData(stockData.map((d: any) => ({ ...d, date: d.date.slice(0, 10) })));
-        setForecast([]); // Clear forecast when symbol changes
-      } catch (error) {
-        console.error(error);
-        toast({ title: 'Error fetching stock data', description: 'Could not load data. Please try again later.', variant: 'destructive' });
-      }
-    };
-    fetchData();
-  }, [symbol, toast]);
-
-  useEffect(() => {
-    if (!running) return;
-    setProgress(0);
-    const id = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(id);
-          return 100;
-        }
-        const step = Math.random() * 18;
-        return Math.min(100, p + step);
-      });
-    }, 300);
-    
-    async function runForecast() {
-        try {
-            const result = await stockPriceForecast({ ticker: symbol });
-            setForecast(result.forecast);
-        } catch (error) {
-            console.error(error);
-            toast({ title: 'Error generating forecast', description: 'The AI model could not generate a forecast.', variant: 'destructive' });
-        } finally {
-            setRunning(false);
-            setProgress(100);
-            clearInterval(id);
-        }
-    }
-    
-    runForecast();
-    return () => clearInterval(id);
-  }, [running, symbol, toast]);
-
-  const mergedSeries = useMemo(() => {
-    const base = data.map((d) => ({ ...d }));
-    forecast.forEach((f) => {
-        const existing = base.find(d => d.date === f.date);
-        if (existing) {
-            existing.forecast = f.price;
-        } else {
-            base.push({ date: f.date, forecast: f.price });
-        }
-    });
-    return base;
-  }, [data, forecast]);
-
-  const metrics = useMemo(() => ({
-    rmse: 1.72,
-    mae: 1.12,
-    r2: 0.89,
-    dir: 64,
-    trainTime: running ? "Running…" : "11.8s",
-  }), [running]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  const handleRunSentiment = async () => {
+  const loadData = useCallback(async () => {
+    if (!symbol) return;
+    setIsLoading(true);
+    setError(null);
+    setData([]);
+
     try {
-        const result = await analyzeMarketSentiment({newsData: '...', socialMediaData: '...'});
-        setSentiment(result);
-    } catch (error) {
-        console.error(error);
-        toast({ title: 'Error analyzing sentiment', variant: 'destructive' });
+      const fetcher = fetchers[provider];
+      const result = await fetcher(symbol);
+      setData(result);
+    } catch (err: any) {
+      console.error(`Failed to fetch data from ${provider}:`, err);
+      setError(`Could not load data from ${provider}. Falling back to mock data. ${err.message}`);
+      setData(generateMockSeries()); // Fallback to mock data
+    } finally {
+      setIsLoading(false);
     }
-  }
-  
-  const currentPrice = data.length > 0 ? data[data.length - 1]?.close ?? 0 : 0;
+  }, [symbol, provider]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      {/* Top Nav */}
-      <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-6 h-6 text-indigo-600" />
-            <span className="font-semibold tracking-tight">StockVision</span>
-            <Badge variant="secondary" className="ml-1">Prototype</Badge>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-body">
+      <Header
+        dark={dark}
+        setDark={setDark}
+        symbol={symbol}
+        setSymbol={setSymbol}
+        provider={provider}
+        setProvider={setProvider}
+      />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex items-center justify-between mb-4">
+            <div className="flex-1">
+                <h1 className="text-2xl font-bold tracking-tight">{symbol} Dashboard</h1>
+                <p className="text-sm text-muted-foreground">
+                    Using <span className="font-semibold">{provider}</span> data source.
+                    {isLoading && <span className="ml-2">Loading...</span>}
+                </p>
+            </div>
+             {error && (
+                <div className="text-xs text-red-500 bg-red-500/10 p-2 rounded-md max-w-md">
+                    <strong>Error:</strong> {error}
+                </div>
+            )}
+            <Button onClick={loadData} variant="outline" size="sm" disabled={isLoading}>
+                {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2"/>}
+                Refresh Data
+            </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 xl:col-span-3 space-y-6">
+            <ControlPanel
+              showMA50={showMA50}
+              setShowMA50={setShowMA50}
+              showMA200={showMA200}
+              setShowMA200={setShowMA200}
+            />
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm opacity-90">
-            <a className="hover:opacity-100" href="#dashboard">Dashboard</a>
-            <a className="hover:opacity-100" href="#predictions">Predictions</a>
-            <a className="hover:opacity-100" href="#analytics">Analytics</a>
-            <a className="hover:opacity-100" href="#portfolio">Portfolio</a>
-          </nav>
+          <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+            <StockChart data={data} isLoading={isLoading} showMA50={showMA50} showMA200={showMA200} />
+            <InfoTabs />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// --- Child Components ---
+
+function Header({ dark, setDark, symbol, setSymbol, provider, setProvider }) {
+  return (
+     <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-6 h-6 text-primary" />
+            <span className="font-semibold tracking-tight">StockVision</span>
+          </div>
+
+          <div className="flex-1 flex justify-center items-center gap-2">
+             <Input 
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                placeholder="Symbol (e.g. AAPL)"
+                className="w-32 h-9"
+             />
+             <Select value={provider} onValueChange={setProvider}>
+                <SelectTrigger className="w-48 h-9">
+                    <SelectValue placeholder="Select Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="yahoo">Yahoo (no key)</SelectItem>
+                    <SelectItem value="alpha">Alpha Vantage (needs key)</SelectItem>
+                    <SelectItem value="mock">Mock Data</SelectItem>
+                </SelectContent>
+             </Select>
+          </div>
+          
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setDark((d) => !d)}>
               {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
             <Button variant="ghost" size="icon"><Bell className="w-5 h-5" /></Button>
-            <Sheet>
+             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="sm"><Settings className="w-4 h-4 mr-2"/>Settings</Button>
+                <Button variant="ghost" size="icon"><Settings className="w-5 h-5"/></Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-lg">
+              <SheetContent>
                 <SheetHeader>
                   <SheetTitle>Global Settings</SheetTitle>
                 </SheetHeader>
-                <div className="mt-4 space-y-6">
-                  <div className="space-y-2">
-                    <Label>Default Model</Label>
-                    <Select value={model} onValueChange={setModel}>
-                      <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                      <SelectContent>
-                        {models.map((m) => (
-                          <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Enable real-time feed</Label>
-                      <p className="text-xs opacity-70">WebSocket updates for prices</p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>API Keys</Label>
-                    <Textarea placeholder="Your API keys are stored securely in .env" />
-                  </div>
-                  <Separator />
-                  <p className="text-xs opacity-70">© 2025 StockVision · Terms · Privacy</p>
-                </div>
               </SheetContent>
             </Sheet>
           </div>
         </div>
       </header>
+  );
+}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6" id="dashboard">
-        {/* Sidebar */}
-        <aside className="lg:col-span-3 space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base"><Search className="w-4 h-4"/>Find a Stock</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-               <Select value={symbol} onValueChange={setSymbol}>
-                  <SelectTrigger><SelectValue placeholder="Choose symbol" /></SelectTrigger>
-                  <SelectContent>
-                    {allStocks.map((s) => (
-                      <SelectItem key={s.ticker} value={s.ticker}>{s.ticker} - {s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              <div className="text-xs opacity-70">Use the dropdown to select a stock.</div>
-            </CardContent>
-          </Card>
+function ControlPanel({ showMA50, setShowMA50, showMA200, setShowMA200 }) {
+    return (
+        <>
+            <Card>
+                <CardHeader><CardTitle className="text-base">Chart Overlays</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between"><Label htmlFor="ma50">50-Day MA</Label><Switch id="ma50" checked={showMA50} onCheckedChange={setShowMA50}/></div>
+                    <div className="flex items-center justify-between"><Label htmlFor="ma200">200-Day MA</Label><Switch id="ma200" checked={showMA200} onCheckedChange={setShowMA200}/></div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader><CardTitle className="text-base">AI Predictions</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                    <Button className="w-full" disabled><Play className="w-4 h-4 mr-2"/>Run Forecast</Button>
+                    <p className="text-xs text-muted-foreground text-center">Prediction controls coming soon.</p>
+                </CardContent>
+            </Card>
+        </>
+    );
+}
 
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Layers className="w-4 h-4"/>Overlays</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between"><Label>MA 50</Label><Switch checked={showMA50} onCheckedChange={setShowMA50}/></div>
-              <div className="flex items-center justify-between"><Label>MA 200</Label><Switch checked={showMA200} onCheckedChange={setShowMA200}/></div>
-              <div className="flex items-center justify-between"><Label>Forecast</Label><Switch checked={showForecast} onCheckedChange={setShowForecast}/></div>
-            </CardContent>
-          </Card>
+function StockChart({ data, isLoading, showMA50, showMA200 }) {
+  const chartData = useMemo(() => data, [data]);
 
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><SlidersHorizontal className="w-4 h-4"/>Model Controls</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Model</Label>
-                <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger><SelectValue placeholder="Choose model" /></SelectTrigger>
-                  <SelectContent>
-                    {models.map((m) => (
-                      <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Prediction Horizon: {horizon} days</Label>
-                <Slider value={[horizon]} min={1} max={30} step={1} onValueChange={(v) => setHorizon(v[0])}/>
-              </div>
-              <div className="space-y-2">
-                <Label>Train/Test Split: {split}%</Label>
-                <Slider value={[split]} min={50} max={95} step={1} onValueChange={(v) => setSplit(v[0])}/>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button className="w-full" onClick={() => setRunning(true)} disabled={running}><Play className="w-4 h-4 mr-2"/>Run Prediction</Button>
-                <Button variant="outline" disabled={!running} onClick={() => setRunning(false)}><StopCircle className="w-4 h-4 mr-2"/>Stop</Button>
-              </div>
-              {running && (
-                <div className="space-y-2">
-                  <Label>Training… {Math.round(progress)}%</Label>
-                  <Progress value={progress} />
-                </div>
-              )}
-              <Separator />
-              <div className="space-y-2">
-                <Label>Upload Dataset (CSV)</Label>
-                <div className="flex items-center gap-2">
-                  <Input type="file" accept=".csv" />
-                  <Button variant="secondary"><Upload className="w-4 h-4 mr-2"/>Parse</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Price Chart</CardTitle>
+      </CardHeader>
+      <CardContent className="h-[400px] pr-0">
+        <ResponsiveContainer width="100%" height="100%">
+          {isLoading ? (
+             <div className="w-full h-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+             </div>
+          ) : (
+            <AreaChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+              <defs>
+                  <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.7}/>
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                  </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} minTickGap={30} tickFormatter={(str) => str.substring(5)} />
+              <YAxis tick={{ fontSize: 12 }} domain={['dataMin - 5', 'auto']} />
+              <Tooltip
+                contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderColor: 'hsl(var(--border))'
+                }}
+                labelStyle={{ fontWeight: 'bold' }}
+                formatter={(value, name) => [typeof value === 'number' ? `$${value.toFixed(2)}` : value, name]}
+              />
+              <Legend />
+              <Area type="monotone" dataKey="close" name="Price" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorClose)" dot={false} />
+              {showMA50 && <Line type="monotone" dataKey="ma50" name="MA 50" dot={false} stroke="hsl(var(--chart-2))" />}
+              {showMA200 && <Line type="monotone" dataKey="ma200" name="MA 200" dot={false} stroke="hsl(var(--chart-4))" />}
+            </AreaChart>
+          )}
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
 
-          <Card id="portfolio">
-            <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><LineChartIcon className="w-4 h-4"/>Watchlist</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {watchlist.map((t) => (
-                <div key={t} className="flex items-center justify-between text-sm">
-                  <button className="underline-offset-2 hover:underline" onClick={() => setSymbol(t)}>
-                    {t}
-                  </button>
-                  <span className="font-mono text-xs opacity-70">
-                    {allStocks.find(s => s.ticker === t)?.price.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </aside>
-
-        {/* Main Content */}
-        <section className="lg:col-span-9 space-y-6">
-          {/* Overview cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard title={`${symbol} Price`} value={`$${currentPrice.toFixed(2)}`} sub="Live" Icon={TrendingUp} />
-            <StatCard title="Sentiment" value={sentiment ? `${Math.round((sentiment.overallSentimentScore + 1) * 50)}% Bullish` : 'N/A'} sub="News & Social" Icon={Gauge} />
-            <StatCard title="RMSE" value={metrics.rmse} sub="Model error" Icon={Info} />
-            <StatCard title="Train Time" value={metrics.trainTime} sub={models.find(m=>m.key===model)?.label} Icon={GitBranch} />
-          </div>
-
-          {/* Chart */}
-          <Card id="predictions">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2"><LineChartIcon className="w-4 h-4"/>Price & Forecast</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[360px]">
-              <ComposedStockChart data={mergedSeries} showMA50={showMA50} showMA200={showMA200} showForecast={showForecast} />
-            </CardContent>
-          </Card>
-
-          {/* Tabs: Metrics / Explainability / News */}
-          <Tabs defaultValue="metrics" className="w-full" id="analytics">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="metrics">Metrics</TabsTrigger>
-              <TabsTrigger value="explain">Explainability</TabsTrigger>
-              <TabsTrigger value="news">News & Sentiment</TabsTrigger>
-            </TabsList>
-            <TabsContent value="metrics" className="mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card><CardHeader className="pb-2"><CardTitle className="text-base">Error Metrics</CardTitle></CardHeader><CardContent>
-                  <ul className="text-sm space-y-2">
-                    <li>RMSE: <b>{metrics.rmse}</b></li>
-                    <li>MAE: <b>{metrics.mae}</b></li>
-                    <li>R²: <b>{metrics.r2}</b></li>
-                    <li>Directional Acc.: <b>{metrics.dir}%</b></li>
-                  </ul>
-                  <Button className="mt-4" variant="outline"><Download className="w-4 h-4 mr-2"/>Download Report</Button>
-                </CardContent></Card>
-                <Card className="md:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-base">Feature Importance (Mock)</CardTitle></CardHeader><CardContent className="h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[{k:"Close",v:0.6},{k:"Volume",v:0.2},{k:"High",v:0.1},{k:"Low",v:0.07},{k:"Open",v:0.03}]}> 
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="k"/>
-                      <YAxis domain={[0,1]} />
-                      <Tooltip />
-                      <Bar dataKey="v" radius={[6,6,0,0]} fill="hsl(var(--primary))" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent></Card>
-              </div>
-            </TabsContent>
-            <TabsContent value="explain" className="mt-4">
-              <Card><CardHeader className="pb-2"><CardTitle className="text-base">SHAP-like Explanation (Mock)</CardTitle></CardHeader><CardContent>
-                <p className="text-sm opacity-80">This is a placeholder for SHAP summary or waterfall charts to explain the model’s prediction for the latest date. Integrate your explainer output here.</p>
-                <div className="mt-4 h-[220px] rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center text-xs opacity-60">Drop your SHAP visualization here</div>
-              </CardContent></Card>
-            </TabsContent>
-            <TabsContent value="news" className="mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="md:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Newspaper className="w-4 h-4"/>Latest Headlines</CardTitle></CardHeader><CardContent>
-                  <ul className="text-sm space-y-3">
-                    {sentiment?.positiveKeywords.map((n,i)=> (
-                      <li key={i} className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium leading-tight">{n}</p>
-                        </div>
-                        <Badge variant="outline" className="border-green-500/50">Bullish</Badge>
-                      </li>
-                    ))}
-                     {sentiment?.negativeKeywords.map((n,i)=> (
-                      <li key={i} className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium leading-tight">{n}</p>
-                        </div>
-                        <Badge variant="outline" className="border-red-500/50">Bearish</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardTitle className="text-base">Sentiment Gauge</CardTitle></CardHeader><CardContent>
-                  <div className="h-[220px] rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center">
-                    <div className="text-5xl font-bold">{sentiment ? `${Math.round((sentiment.overallSentimentScore + 1) * 50)}%` : 'N/A'}</div>
-                    <div className="text-xs opacity-70">Bullish</div>
-                    <Button size="sm" className="mt-3" variant="outline" onClick={handleRunSentiment}><RefreshCw className="w-4 h-4 mr-2"/>Recompute</Button>
-                  </div>
-                </CardContent></Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </section>
-      </main>
-    </div>
+function InfoTabs() {
+  return (
+    <Tabs defaultValue="news">
+      <TabsList>
+        <TabsTrigger value="news">News</TabsTrigger>
+        <TabsTrigger value="profile">Company Profile</TabsTrigger>
+        <TabsTrigger value="financials">Financials</TabsTrigger>
+      </TabsList>
+      <TabsContent value="news">
+        <Card>
+          <CardHeader><CardTitle>Latest News</CardTitle></CardHeader>
+          <CardContent>
+             <p className="text-muted-foreground">Live news feed coming soon.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+       <TabsContent value="profile">
+        <Card>
+          <CardHeader><CardTitle>Company Profile</CardTitle></CardHeader>
+          <CardContent>
+             <p className="text-muted-foreground">Company profile data coming soon.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+       <TabsContent value="financials">
+        <Card>
+          <CardHeader><CardTitle>Financials</CardTitle></CardHeader>
+          <CardContent>
+             <p className="text-muted-foreground">Financial statements coming soon.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
