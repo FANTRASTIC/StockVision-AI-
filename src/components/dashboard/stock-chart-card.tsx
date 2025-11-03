@@ -112,6 +112,7 @@ export function StockChartCard() {
         const fetchData = async () => {
             setIsLoading(true);
             setApiError(null);
+            setChartData([]);
             try {
                 const data = await getDailyStockData(selectedStock.ticker);
                 setChartData(data);
@@ -120,14 +121,13 @@ export function StockChartCard() {
                 let description = `Could not load data for ${selectedStock.ticker}. Please check your API key or try again later.`;
                 if (error.message && error.message.includes('limit')) {
                     description = `Alpha Vantage API limit reached. Please wait a moment or upgrade your key.`
-                    setApiError(description);
                 }
+                setApiError(description);
                 toast({
                     title: 'Error Fetching Stock Data',
                     description: description,
                     variant: 'destructive'
                 });
-                setChartData([]); // Clear data on error
             } finally {
                 setIsLoading(false);
             }
@@ -153,7 +153,7 @@ export function StockChartCard() {
         if (isLoading) {
              return <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
         }
-        if (chartData.length === 0) {
+        if (apiError || chartData.length === 0) {
             return <div className="h-[400px] flex items-center justify-center text-center"><p className="text-destructive">{apiError || "No data available. The API might be unavailable."}</p></div>
         }
 
