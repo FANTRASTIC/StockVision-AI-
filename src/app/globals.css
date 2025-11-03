@@ -24,11 +24,11 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 142.1 76.2% 36.3%;
     --radius: 0.5rem;
-    --chart-1: 142.1 76.2% 36.3%;
-    --chart-2: 221.2 83.2% 53.3%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: 120 70% 40%;
+    --chart-2: 180 70% 40%;
+    --chart-3: 240 70% 40%;
+    --chart-4: 300 70% 40%;
+    --chart-5: 30 70% 40%;
     --sidebar-background: 220 13% 91%;
     --sidebar-foreground: 222.2 84% 4.9%;
     --sidebar-primary: 231 48% 48%;
@@ -59,11 +59,11 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 142.1 70.6% 45.3%;
-    --chart-1: 142.1 70.6% 45.3%;
-    --chart-2: 217.2 32.6% 17.5%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-1: 120 70% 50%;
+    --chart-2: 180 70% 50%;
+    --chart-3: 240 70% 50%;
+    --chart-4: 300 70% 50%;
+    --chart-5: 30 70% 50%;
     --sidebar-background: 0 0% 13%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 231 48% 48%;
@@ -83,3 +83,5 @@
     @apply bg-background text-foreground;
   }
 }
+
+    

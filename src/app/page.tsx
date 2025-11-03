@@ -313,16 +313,17 @@ function StockChart({ data, isLoading, showMA50, showMA200 }) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Price Chart</CardTitle>
-            <CardDescription>Daily price history</CardDescription>
-          </div>
-          {lastDataPoint && (
-            <div className="text-right">
-              <p className="text-2xl font-bold">${price.toFixed(2)}</p>
-              <p className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-                  {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{(priceChange / (price - priceChange) * 100).toFixed(2)}%)
-              </p>
+          {lastDataPoint ? (
+            <div>
+              <CardTitle className="text-2xl font-bold">${price.toFixed(2)}</CardTitle>
+              <CardDescription className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                {isPositive ? '+' : ''}{priceChange.toFixed(2)} ({isPositive ? '+' : ''}{(priceChange / (price - priceChange) * 100).toFixed(2)}%)
+              </CardDescription>
+            </div>
+          ) : (
+            <div>
+                <CardTitle>Price Chart</CardTitle>
+                <CardDescription>Daily price history</CardDescription>
             </div>
           )}
         </div>
@@ -399,3 +400,5 @@ function InfoTabs() {
     </Tabs>
   );
 }
+
+    
