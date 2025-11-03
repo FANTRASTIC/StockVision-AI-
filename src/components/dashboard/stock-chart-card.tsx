@@ -19,7 +19,8 @@ import {
   Area,
 } from 'recharts';
 import { combinedChartData } from '@/lib/data';
-import { ChartTooltipContent } from '@/components/ui/chart';
+import { ChartTooltipContent, ChartContainer, type ChartConfig } from '@/components/ui/chart';
+import { useState, useEffect } from 'react';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -59,8 +60,38 @@ const Candlestick = (props: any) => {
   );
 };
 
+const chartConfig = {
+  rsi: {
+    label: "RSI",
+    color: "hsl(var(--chart-1))",
+  },
+  macd: {
+    label: "MACD",
+    color: "hsl(var(--chart-2))",
+  },
+  signal: {
+    label: "Signal",
+    color: "#facc15",
+  },
+  histogram: {
+    label: "Histogram",
+    color: "hsl(var(--muted))",
+  },
+} satisfies ChartConfig
 
 export function StockChartCard() {
+    const [lastDataPoint, setLastDataPoint] = useState(combinedChartData[combinedChartData.length - 1]);
+    const [secondLastDataPoint, setSecondLastDataPoint] = useState(combinedChartData[combinedChartData.length - 2]);
+
+    useEffect(() => {
+        setLastDataPoint(combinedChartData[combinedChartData.length-1]);
+        setSecondLastDataPoint(combinedChartData[combinedChartData.length-2]);
+    }, []);
+
+    if (!lastDataPoint || !secondLastDataPoint) {
+        return <Card><CardHeader><CardTitle>Loading Chart...</CardTitle></CardHeader><CardContent><div className="h-[400px] flex items-center justify-center"><p>Loading data...</p></div></CardContent></Card>
+    }
+
   return (
     <Card>
       <CardHeader>
@@ -70,40 +101,44 @@ export function StockChartCard() {
             <CardDescription>Apple Inc. Daily Chart</CardDescription>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold">{combinedChartData[combinedChartData.length-1].close}</p>
-            <p className={`text-sm ${combinedChartData[combinedChartData.length-1].close > combinedChartData[combinedChartData.length-2].close ? 'text-green-500' : 'text-red-500'}`}>
-              { (combinedChartData[combinedChartData.length-1].close - combinedChartData[combinedChartData.length-2].close).toFixed(2)} 
-              ({((combinedChartData[combinedChartData.length-1].close - combinedChartData[combinedChartData.length-2].close) / combinedChartData[combinedChartData.length-2].close * 100).toFixed(2)}%)
+            <p className="text-2xl font-bold">{lastDataPoint.close}</p>
+            <p className={`text-sm ${lastDataPoint.close > secondLastDataPoint.close ? 'text-green-500' : 'text-red-500'}`}>
+              { (lastDataPoint.close - secondLastDataPoint.close).toFixed(2)} 
+              ({((lastDataPoint.close - secondLastDataPoint.close) / secondLastDataPoint.close * 100).toFixed(2)}%)
             </p>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[400px]">
-           <ResponsiveContainer width="100%" height="70%">
-            <ComposedChart data={combinedChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
-              <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-              <YAxis domain={['dataMin - 10', 'dataMax + 10']} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="close" shape={<Candlestick />} />
-            </ComposedChart>
-          </ResponsiveContainer>
-          <ResponsiveContainer width="100%" height="30%">
-             <ComposedChart data={combinedChartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} hide/>
-                <YAxis yAxisId="left" domain={[0, 100]} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false}/>
-                <YAxis yAxisId="right" domain={['dataMin - 1', 'dataMax + 1']} orientation="right" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
-                <Tooltip content={<ChartTooltipContent indicator="dot" />} />
-                <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="rsi" stroke="hsl(var(--chart-1))" dot={false} name="RSI"/>
-                <Line yAxisId="right" type="monotone" dataKey="macd" stroke="hsl(var(--chart-2))" dot={false} name="MACD"/>
-                <Line yAxisId="right" type="monotone" dataKey="signal" stroke="#facc15" dot={false} name="Signal"/>
-                <Bar yAxisId="right" dataKey="histogram" fill="hsl(var(--muted))" name="Histogram" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartContainer config={chartConfig} className="h-[400px] w-full">
+            <div className="h-[70%] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={combinedChartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))"/>
+                    <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <YAxis domain={['dataMin - 10', 'dataMax + 10']} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="close" shape={<Candlestick />} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="h-[30%] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={combinedChartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} hide/>
+                        <YAxis yAxisId="left" domain={[0, 100]} orientation="left" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false}/>
+                        <YAxis yAxisId="right" domain={['dataMin - 1', 'dataMax + 1']} orientation="right" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} tickLine={false} axisLine={false} />
+                        <Tooltip content={<ChartTooltipContent indicator="dot" />} />
+                        <Legend />
+                        <Line yAxisId="left" type="monotone" dataKey="rsi" stroke="var(--color-rsi)" dot={false} name="RSI"/>
+                        <Line yAxisId="right" type="monotone" dataKey="macd" stroke="var(--color-macd)" dot={false} name="MACD"/>
+                        <Line yAxisId="right" type="monotone" dataKey="signal" stroke="var(--color-signal)" dot={false} name="Signal"/>
+                        <Bar yAxisId="right" dataKey="histogram" fill="var(--color-histogram)" name="Histogram" />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

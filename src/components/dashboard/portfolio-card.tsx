@@ -41,10 +41,11 @@ const generateDayGains = (holdings: PortfolioHolding[]) => {
 
 
 export function PortfolioCard() {
-  const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>([]);
+  const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>(generateDayGains(portfolioHoldings));
 
   useEffect(() => {
-    setDayGains(generateDayGains(portfolioHoldings));
+    // Data is already generated on initial state, this is for client-side consistency if needed.
+    // In this case, it's not strictly necessary as the seeded random is deterministic.
   }, []);
 
   const totalValue = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.currentPrice, 0);
