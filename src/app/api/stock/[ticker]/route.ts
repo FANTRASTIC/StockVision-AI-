@@ -132,7 +132,8 @@ export async function GET(req: NextRequest, { params }: { params: { ticker: stri
     return Response.json({ data: cached.data, fromCache: true });
   }
 
-  const apiKey = process.env.ALPHAVANTAGE_API_KEY;
+  // const apiKey = process.env.ALPHAVANTAGE_API_KEY;
+  const apiKey = 'RK8GMH0UOXGXNHQ4'; // TEMPORARY: Hardcoded for debugging
   if (!apiKey) {
     return new Response(JSON.stringify({ error: "API key is not configured on the server" }), { status: 500 });
   }
