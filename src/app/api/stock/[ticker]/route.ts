@@ -1,7 +1,8 @@
+
 import { type NextRequest } from "next/server";
 
-const cache = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const memoryCache = new Map<string, { t: number; data: any }>();
+const ONE_MIN = 60_000; // 1 minute cache
 
 // Helper to calculate RSI
 const calculateRSI = (data: any[], period = 14) => {
@@ -95,7 +96,7 @@ const calculateMACD = (data: any[], shortPeriod = 12, longPeriod = 26, signalPer
     }));
 };
 
-const processTimeSeries = (timeSeries: Record<string, any>, isIntraday: boolean) => {
+const processTimeSeries = (timeSeries: Record<string, any>) => {
     const data = Object.keys(timeSeries).map(date => {
         const dayData = timeSeries[date];
         return {
@@ -104,6 +105,7 @@ const processTimeSeries = (timeSeries: Record<string, any>, isIntraday: boolean)
             high: parseFloat(dayData['2. high']),
             low: parseFloat(dayData['3. low']),
             close: parseFloat(dayData['4. close']),
+            volume: parseInt(dayData['5. volume'], 10)
         };
     }).reverse();
 
@@ -117,9 +119,17 @@ export async function GET(req: NextRequest, { params }: { params: { ticker: stri
   const ticker = params.ticker;
   const { searchParams } = new URL(req.url);
   const range = searchParams.get("range") || '1M';
+  const isIntraday = ['1D', '5D'].includes(range);
+  const interval = '5min';
 
   if (!ticker) {
     return new Response(JSON.stringify({ error: "Ticker symbol is required" }), { status: 400 });
+  }
+  
+  const cacheKey = `${ticker.toUpperCase()}_${range}`;
+  const cached = memoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.t < ONE_MIN) {
+    return Response.json({ data: cached.data, fromCache: true });
   }
 
   const apiKey = process.env.ALPHAVANTAGE_API_KEY;
@@ -127,62 +137,44 @@ export async function GET(req: NextRequest, { params }: { params: { ticker: stri
     return new Response(JSON.stringify({ error: "API key is not configured on the server" }), { status: 500 });
   }
 
-  const cacheKey = `${ticker.toUpperCase()}_${range}`;
-  const now = Date.now();
-  const cached = cache.get(cacheKey);
+  const getApiUrl = () => {
+    if (isIntraday) {
+      return `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${ticker}&interval=${interval}&outputsize=full&apikey=${apiKey}`;
+    }
+    const outputsize = ['1M'].includes(range) ? 'compact' : 'full';
+    return `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${ticker}&outputsize=${outputsize}&apikey=${apiKey}`;
+  };
 
-  if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    return new Response(JSON.stringify({ data: cached.data, fromCache: true }), { status: 200 });
-  }
-
-  let apiUrl: string;
-  let isIntraday = false;
-
-  switch (range) {
-      case '1D':
-      case '5D':
-          apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${ticker}&interval=5min&outputsize=full&apikey=${apiKey}`;
-          isIntraday = true;
-          break;
-      case '1M':
-          apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${ticker}&outputsize=compact&apikey=${apiKey}`;
-          break;
-      case '6M':
-      case 'YTD':
-      case '1Y':
-      case '5Y':
-      case 'Max':
-      default:
-          apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${ticker}&outputsize=full&apikey=${apiKey}`;
-          break;
-  }
-
+  const apiUrl = getApiUrl();
+  
   try {
-    const response = await fetch(apiUrl);
+    const response = await fetch(apiUrl, { next: { revalidate: 0 } });
     if (!response.ok) {
         throw new Error(`Alpha Vantage API request failed with status: ${response.status}`);
     }
-    const data = await response.json();
+    const json = await response.json();
 
-    if (data["Error Message"]) {
-      return new Response(JSON.stringify({ error: "Invalid symbol or API error from Alpha Vantage", detail: data["Error Message"] }), { status: 400 });
+    if (json.Note) {
+      return Response.json({ ok: false, error: "rate_limit", detail: json.Note }, { status: 429 });
     }
-    if (data["Note"]) {
-      return new Response(JSON.stringify({ error: "Rate limit exceeded", detail: data["Note"] }), { status: 429 });
+    if (json["Error Message"] || json.Information) {
+      return Response.json(
+        { ok: false, error: "api_error", detail: json["Error Message"] || json.Information },
+        { status: 400 }
+      );
     }
     
-    const timeSeriesKey = Object.keys(data).find(key => key.includes('Time Series'));
-    if (!timeSeriesKey) {
-        return new Response(JSON.stringify({ error: "No time series data found in the response from Alpha Vantage." }), { status: 500 });
+    const seriesKey = Object.keys(json).find(k => k.toLowerCase().includes('time series'));
+    if (!seriesKey || !json[seriesKey]) {
+        return Response.json({ ok: false, error: "no_series", detail: "No time series data found in the response from Alpha Vantage." }, { status: 502 });
     }
 
-    const combinedData = processTimeSeries(data[timeSeriesKey], isIntraday);
-
-    cache.set(cacheKey, { timestamp: now, data: combinedData });
-    return new Response(JSON.stringify({ data: combinedData, fromCache: false }), { status: 200 });
+    const combinedData = processTimeSeries(json[seriesKey]);
+    memoryCache.set(cacheKey, { t: Date.now(), data: combinedData });
+    return Response.json({ data: combinedData });
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-    return new Response(JSON.stringify({ error: "Failed to fetch from Alpha Vantage", detail: errorMessage }), { status: 500 });
+    return Response.json({ ok: false, error: "network", detail: errorMessage }, { status: 500 });
   }
 }

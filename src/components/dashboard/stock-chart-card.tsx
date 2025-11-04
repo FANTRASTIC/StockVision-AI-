@@ -3,10 +3,10 @@
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardFooter
 } from '@/components/ui/card';
 import {
   ComposedChart,
@@ -22,11 +22,11 @@ import {
 import { allStocks } from '@/lib/data';
 import { ChartTooltipContent, ChartContainer, type ChartConfig } from '@/components/ui/chart';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { getDailyStockData } from '@/lib/services/alpha-vantage';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { cn, toNum } from '@/lib/utils';
+import { getDailyStockData } from '@/lib/services/alpha-vantage';
 
 type CombinedData = {
     date: string;
@@ -38,7 +38,7 @@ type CombinedData = {
     macd: number | null;
     signal: number | null;
     histogram: number | null;
-}
+};
 
 const chartConfig = {
   close: {
@@ -79,20 +79,16 @@ export function StockChartCard() {
     const fetchData = useCallback(async (ticker: string, range: string) => {
         setIsLoading(true);
         setApiError(null);
-        setChartData([]);
+        setChartData([]); // Clear previous data
         try {
             const data = await getDailyStockData(ticker, range);
             setChartData(data);
         } catch (error: any) {
             console.error(error);
-            let description = error.message || `Could not load data for ${ticker}. Please check your API key or try again later.`;
-            if (error.message && error.message.includes('limit')) {
-                description = `API rate limit reached. Please wait a moment.`;
-            }
-            setApiError(description);
+            setApiError(error.message);
             toast({
                 title: 'Error Fetching Stock Data',
-                description: description,
+                description: error.message,
                 variant: 'destructive'
             });
         } finally {
@@ -100,27 +96,37 @@ export function StockChartCard() {
         }
     }, [toast]);
 
+
     useEffect(() => {
         fetchData(selectedTicker, activeRange);
     }, [selectedTicker, activeRange, fetchData]);
     
-    const { lastDataPoint, secondLastDataPoint, price, priceChange, priceChangePercent, afterHoursPrice, afterHoursChange, afterHoursChangePercent } = useMemo(() => {
-        const last = chartData?.at(-1);
-        const secondLast = chartData?.at(-2);
+    const { price, priceChange, priceChangePercent, afterHoursPrice, afterHoursChange, afterHoursChangePercent } = useMemo(() => {
+        if (!chartData || chartData.length < 2) {
+            const lastPrice = chartData?.[0]?.close ?? 0;
+            return {
+                price: lastPrice,
+                priceChange: 0,
+                priceChangePercent: 0,
+                afterHoursPrice: lastPrice,
+                afterHoursChange: 0,
+                afterHoursChangePercent: 0,
+            };
+        }
         
-        const priceNum = toNum(last?.close);
-        const priceChangeNum = priceNum - toNum(secondLast?.close);
-        const priceChangePercentNum = toNum(secondLast?.close) === 0 ? 0 : (priceChangeNum / toNum(secondLast?.close)) * 100;
+        const last = chartData.at(-1)!;
+        const secondLast = chartData.at(-2)!;
+        
+        const priceNum = toNum(last.close);
+        const priceChangeNum = priceNum - toNum(secondLast.close);
+        const priceChangePercentNum = toNum(secondLast.close) === 0 ? 0 : (priceChangeNum / toNum(secondLast.close)) * 100;
         
         // Mock after-hours data
         const afterHoursChangeNum = (Math.random() - 0.5) * (priceNum * 0.005);
         const afterHoursPriceNum = priceNum + afterHoursChangeNum;
-        const afterHoursChangePercentNum = (afterHoursChangeNum / priceNum) * 100;
-
+        const afterHoursChangePercentNum = priceNum === 0 ? 0 : (afterHoursChangeNum / priceNum) * 100;
 
         return {
-            lastDataPoint: last,
-            secondLastDataPoint: secondLast,
             price: priceNum,
             priceChange: priceChangeNum,
             priceChangePercent: priceChangePercentNum,
@@ -146,7 +152,7 @@ export function StockChartCard() {
              return <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
         }
         if (apiError || !chartData || chartData.length === 0) {
-            return <div className="h-[400px] flex items-center justify-center text-center"><p className="text-destructive">{apiError || "No data available. The API might be unavailable."}</p></div>
+            return <div className="h-[400px] flex items-center justify-center text-center"><p className="text-destructive">{apiError || "No data available."}</p></div>
         }
 
         return (
@@ -186,6 +192,9 @@ export function StockChartCard() {
                 peRatio: 'N/A', divYield: 'N/A', prevClose: 0,
             };
         }
+        const lastDataPoint = chartData.at(-1);
+        const secondLastDataPoint = chartData.at(-2);
+
         return {
             open: lastDataPoint?.open,
             high: Math.max(...chartData.map(d => d.high)),
@@ -195,7 +204,7 @@ export function StockChartCard() {
             divYield: (Math.random() * 2).toFixed(2) + '%',
             prevClose: secondLastDataPoint?.close,
         }
-    }, [chartData, lastDataPoint, secondLastDataPoint]);
+    }, [chartData]);
 
 
   return (
@@ -232,16 +241,14 @@ export function StockChartCard() {
         </div>
       </CardContent>
       <CardFooter className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm px-6 pt-4 pb-6 border-t">
-        <div className="flex justify-between"><span className="text-muted-foreground">Open</span> <span className="font-medium">{keyMetrics.open?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Open</span> <span className="font-medium">{keyMetrics.open?.toFixed(2) ?? 'N/A'}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Mkt cap</span> <span className="font-medium">{keyMetrics.mktCap}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">High</span> <span className="font-medium">{keyMetrics.high?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">High</span> <span className="font-medium">{keyMetrics.high?.toFixed(2) ?? 'N/A'}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">P/E ratio</span> <span className="font-medium">{keyMetrics.peRatio}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Low</span> <span className="font-medium">{keyMetrics.low?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Low</span> <span className="font-medium">{keyMetrics.low?.toFixed(2) ?? 'N/A'}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Div yield</span> <span className="font-medium">{keyMetrics.divYield}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Prev. close</span> <span className="font-medium">{keyMetrics.prevClose?.toFixed(2)}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Prev. close</span> <span className="font-medium">{keyMetrics.prevClose?.toFixed(2) ?? 'N/A'}</span></div>
       </CardFooter>
     </Card>
   );
 }
-
-    
