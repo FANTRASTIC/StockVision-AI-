@@ -16,6 +16,7 @@ import AiToolsPage from './ai-tools/page';
 import AlertsPage from './alerts/page';
 import ChartsPage from './charts/page';
 import PortfolioPage from './portfolio/page';
+import ExplorePage from './explore/page';
 
 export default function DashboardPage() {
   const [selectedTicker, setSelectedTicker] = useState(allStocks[0].ticker);
@@ -45,6 +46,8 @@ export default function DashboardPage() {
         );
       case 'portfolio':
         return <PortfolioPage isTab />;
+      case 'explore':
+        return <ExplorePage isTab />;
       case 'ai-tools':
         return <AiToolsPage isTab />;
       case 'charts':

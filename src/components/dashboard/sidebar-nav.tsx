@@ -18,6 +18,7 @@ import {
   Wallet,
   Bell,
   Bot,
+  Compass,
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -58,6 +59,16 @@ export function SidebarNav({ activeTab, setActiveTab }: SidebarNavProps) {
             >
               <Wallet />
               <span>Portfolio</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Explore"
+              onClick={() => handleNav('explore')}
+              isActive={activeTab === 'explore'}
+            >
+              <Compass />
+              <span>Explore</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
