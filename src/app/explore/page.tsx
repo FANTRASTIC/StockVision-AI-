@@ -5,7 +5,7 @@ import { DashboardHeader } from '@/components/dashboard/header';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Flame } from 'lucide-react';
+import { TrendingUp, TrendingDown, Flame, Newspaper } from 'lucide-react';
 import { allStocks } from '@/lib/data';
 import { useMemo } from 'react';
 
@@ -28,6 +28,39 @@ const generateTrendingData = () => {
     volume: `${(Math.random() * 50).toFixed(2)}M`
   }));
 };
+
+const mockNews = [
+  {
+    title: "Tech Stocks Surge as Chip Maker Announces Breakthrough",
+    source: "Bloomberg",
+    time: "2h ago",
+    sentiment: "positive",
+  },
+  {
+    title: "Federal Reserve Hints at Another Rate Hike, Spooking Markets",
+    source: "Reuters",
+    time: "4h ago",
+    sentiment: "negative",
+  },
+  {
+    title: "E-commerce Giant to Expand into Drone Delivery, Stock Jumps",
+    source: "The Wall Street Journal",
+    time: "5h ago",
+    sentiment: "positive",
+  },
+  {
+    title: "Automaker Recalls Over 500,000 Vehicles Due to Software Glitch",
+    source: "Associated Press",
+    time: "8h ago",
+    sentiment: "negative",
+  },
+    {
+    title: "Entertainment Conglomerate's Streaming Service Exceeds Subscriber Projections",
+    source: "Variety",
+    time: "1d ago",
+    sentiment: "positive",
+  }
+];
 
 
 export default function ExplorePage({ isTab }: { isTab?: boolean }) {
@@ -94,15 +127,42 @@ export default function ExplorePage({ isTab }: { isTab?: boolean }) {
           </CardContent>
         </Card>
       </div>
-       <Card>
-        <CardHeader>
-          <CardTitle>Most Active</CardTitle>
-          <CardDescription>Stocks with the highest trading volume today.</CardDescription>
-        </CardHeader>
-        <CardContent>
-           <StockTable stocks={[...trendingStocks].sort((a,b) => parseFloat(b.volume) - parseFloat(a.volume))} />
-        </CardContent>
-      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+            <CardHeader>
+            <CardTitle>Most Active</CardTitle>
+            <CardDescription>Stocks with the highest trading volume today.</CardDescription>
+            </CardHeader>
+            <CardContent>
+            <StockTable stocks={[...trendingStocks].sort((a,b) => parseFloat(b.volume) - parseFloat(a.volume))} />
+            </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Newspaper /> Recent News</CardTitle>
+            <CardDescription>The latest headlines driving the market.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {mockNews.map((item, index) => (
+                <div key={index} className="flex items-start gap-4">
+                  <div className="flex-1">
+                    <p className="font-semibold leading-snug">{item.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {item.source} &bull; {item.time}
+                    </p>
+                  </div>
+                  <Badge variant={item.sentiment === 'positive' ? 'default' : 'destructive'} className={item.sentiment === 'positive' ? 'bg-green-600/20 text-green-300 border-green-600/30' : 'bg-red-600/20 text-red-300 border-red-600/30'}>
+                    {item.sentiment}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
     </main>
   );
 
