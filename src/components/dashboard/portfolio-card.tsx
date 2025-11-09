@@ -20,12 +20,11 @@ import { useState, useEffect } from 'react';
 import { toNum } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
-// Simple pseudo-random number generator to ensure consistency between server and client
+// Simple pseudo-random number generator
 const seededRandom = (seed: number) => {
   let s = Math.sin(seed) * 10000;
   return s - Math.floor(s);
 };
-
 
 const generateDayGains = (holdings: PortfolioHolding[]) => {
     return holdings.map((holding, index) => {
@@ -49,13 +48,14 @@ interface PortfolioCardProps {
 
 export function PortfolioCard({ holdings }: PortfolioCardProps) {
   const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    // This effect runs only on the client, after the initial render.
+    // This prevents hydration mismatch.
+    setIsClient(true);
     if (holdings && holdings.length > 0) {
-        // Generate on client to avoid hydration mismatch and re-generate when holdings change
         setDayGains(generateDayGains(holdings));
-        setIsLoading(false);
     }
   }, [holdings]);
 
@@ -64,7 +64,7 @@ export function PortfolioCard({ holdings }: PortfolioCardProps) {
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = totalCost !== 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-  if (isLoading) {
+  if (!isClient) {
       return (
         <Card>
             <CardHeader>
