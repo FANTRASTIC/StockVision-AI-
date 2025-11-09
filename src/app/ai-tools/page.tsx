@@ -1,40 +1,32 @@
 
 'use client';
-import { Sidebar, SidebarInset } from '@/components/ui/sidebar';
-import { SidebarNav } from '@/components/dashboard/sidebar-nav';
-import { DashboardHeader } from '@/components/dashboard/header';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { PriceForecastCard } from '@/components/dashboard/price-forecast-card';
+import { RiskManagementCard } from '@/components/dashboard/risk-management-card';
+import { MarketSentimentCard } from '@/components/dashboard/market-sentiment-card';
 
 export default function AiToolsPage({ isTab }: { isTab?: boolean }) {
     const content = (
     <main className="p-4 sm:p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>AI Tools</CardTitle>
-          <CardDescription>This is a placeholder for the AI Tools page. You can feature various AI-powered analysis tools, screeners, or chatbots here.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center h-96 border-2 border-dashed rounded-lg">
-            <p className="text-muted-foreground">AI Tools Content Goes Here</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <PriceForecastCard />
+        <RiskManagementCard />
+        <MarketSentimentCard />
+      </div>
     </main>
   );
 
+  // This component is only used as a tab, so we don't need the standalone page logic.
+  // However, keeping it allows for future flexibility if it needs to be a separate page.
   if (isTab) {
     return content;
   }
 
+  // The code below is for rendering as a standalone page, which is not the current use case.
+  // It is kept for completeness.
   return (
     <>
-      <Sidebar>
-        <SidebarNav activeTab="ai-tools" setActiveTab={() => {}} />
-      </Sidebar>
-      <SidebarInset>
-        <DashboardHeader selectedTicker={''} onTickerSelect={() => {}} />
-        {content}
-      </SidebarInset>
+      {/* Standalone page would need Sidebar and Header components here */}
+      {content}
     </>
   );
 }

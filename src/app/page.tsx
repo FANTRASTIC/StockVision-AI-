@@ -7,9 +7,6 @@ import { DashboardHeader } from '@/components/dashboard/header';
 import { StockChartCard } from '@/components/dashboard/stock-chart-card';
 import { PortfolioCard } from '@/components/dashboard/portfolio-card';
 import { TradingWidget } from '@/components/dashboard/trading-widget';
-import { PriceForecastCard } from '@/components/dashboard/price-forecast-card';
-import { RiskManagementCard } from '@/components/dashboard/risk-management-card';
-import { MarketSentimentCard } from '@/components/dashboard/market-sentiment-card';
 import { WatchlistCard } from '@/components/dashboard/watchlist-card';
 import { allStocks } from '@/lib/data';
 import AiToolsPage from './ai-tools/page';
@@ -35,11 +32,6 @@ export default function DashboardPage() {
               <div className="space-y-6">
                 <TradingWidget />
               </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <PriceForecastCard />
-              <RiskManagementCard />
-              <MarketSentimentCard />
             </div>
             <WatchlistCard />
           </>
