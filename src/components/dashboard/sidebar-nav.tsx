@@ -19,10 +19,16 @@ import {
   Bell,
   Bot,
 } from 'lucide-react';
-import { usePathname } from 'next/navigation';
 
-export function SidebarNav() {
-  const pathname = usePathname();
+interface SidebarNavProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+}
+
+export function SidebarNav({ activeTab, setActiveTab }: SidebarNavProps) {
+  const handleNav = (tab: string) => {
+    setActiveTab(tab);
+  };
 
   return (
     <Sidebar>
@@ -37,48 +43,48 @@ export function SidebarNav() {
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Dashboard"
-              href="/"
-              isActive={pathname === '/'}
+              onClick={() => handleNav('dashboard')}
+              isActive={activeTab === 'dashboard'}
             >
               <Home />
               <span>Dashboard</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
-              tooltip="Portfolio" 
-              href="/portfolio"
-              isActive={pathname === '/portfolio'}
+            <SidebarMenuButton
+              tooltip="Portfolio"
+              onClick={() => handleNav('portfolio')}
+              isActive={activeTab === 'portfolio'}
             >
               <Wallet />
               <span>Portfolio</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
-              tooltip="AI Tools" 
-              href="/ai-tools"
-              isActive={pathname === '/ai-tools'}
+            <SidebarMenuButton
+              tooltip="AI Tools"
+              onClick={() => handleNav('ai-tools')}
+              isActive={activeTab === 'ai-tools'}
             >
               <Bot />
               <span>AI Tools</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
-              tooltip="Charts" 
-              href="/charts"
-              isActive={pathname === '/charts'}
+            <SidebarMenuButton
+              tooltip="Charts"
+              onClick={() => handleNav('charts')}
+              isActive={activeTab === 'charts'}
             >
               <BarChart2 />
               <span>Charts</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
-              tooltip="Alerts" 
-              href="/alerts"
-              isActive={pathname === '/alerts'}
+            <SidebarMenuButton
+              tooltip="Alerts"
+              onClick={() => handleNav('alerts')}
+              isActive={activeTab === 'alerts'}
             >
               <Bell />
               <span>Alerts</span>
