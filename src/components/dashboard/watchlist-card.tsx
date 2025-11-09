@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { watchlist } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { BellPlus } from 'lucide-react';
 import {
@@ -31,7 +30,11 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { WatchlistItem } from '@/lib/data';
 
-export function WatchlistCard() {
+interface WatchlistCardProps {
+    watchlist: WatchlistItem[];
+}
+
+export function WatchlistCard({ watchlist }: WatchlistCardProps) {
   const [isAlertDialogOpen, setAlertDialogOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<WatchlistItem | null>(null);
   const { toast } = useToast();

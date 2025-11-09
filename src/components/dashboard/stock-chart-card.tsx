@@ -62,9 +62,10 @@ const timeRanges = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'Max'];
 interface StockChartCardProps {
     selectedTicker: string;
     onTickerSelect: (ticker: string) => void;
+    onPriceUpdate: (ticker: string, newPrice: number) => void;
 }
 
-export function StockChartCard({ selectedTicker, onTickerSelect }: StockChartCardProps) {
+export function StockChartCard({ selectedTicker, onTickerSelect, onPriceUpdate }: StockChartCardProps) {
     const [chartData, setChartData] = useState<CombinedData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
@@ -85,7 +86,13 @@ export function StockChartCard({ selectedTicker, onTickerSelect }: StockChartCar
         setChartData([]); // Clear previous data
         try {
             const data = await getDailyStockData(ticker, range);
-            setChartData(data);
+            if (data && data.length > 0) {
+              setChartData(data);
+              const latestPrice = data[data.length - 1].close;
+              onPriceUpdate(ticker, latestPrice);
+            } else {
+               throw new Error('No data received from API.');
+            }
         } catch (error: any) {
             console.error(error);
             setApiError(error.message);
@@ -97,7 +104,7 @@ export function StockChartCard({ selectedTicker, onTickerSelect }: StockChartCar
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, [toast, onPriceUpdate]);
 
 
     useEffect(() => {
