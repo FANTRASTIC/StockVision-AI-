@@ -4,8 +4,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
-  CardDescription,
   CardFooter
 } from '@/components/ui/card';
 import {
@@ -61,8 +59,12 @@ const chartConfig = {
 
 const timeRanges = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'Max'];
 
-export function StockChartCard() {
-    const [selectedTicker, setSelectedTicker] = useState(allStocks[0].ticker);
+interface StockChartCardProps {
+    selectedTicker: string;
+    onTickerSelect: (ticker: string) => void;
+}
+
+export function StockChartCard({ selectedTicker, onTickerSelect }: StockChartCardProps) {
     const [chartData, setChartData] = useState<CombinedData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
@@ -71,6 +73,7 @@ export function StockChartCard() {
     const [currentDate, setCurrentDate] = useState('');
 
     useEffect(() => {
+        // This will only run on the client, after the component has mounted.
         setCurrentDate(new Date().toLocaleString());
     }, []);
 
@@ -114,8 +117,8 @@ export function StockChartCard() {
             };
         }
         
-        const last = chartData.at(-1)!;
-        const secondLast = chartData.at(-2)!;
+        const last = chartData[chartData.length - 1]!;
+        const secondLast = chartData[chartData.length - 2]!;
         
         const priceNum = toNum(last.close);
         const priceChangeNum = priceNum - toNum(secondLast.close);
@@ -192,8 +195,8 @@ export function StockChartCard() {
                 peRatio: 'N/A', divYield: 'N/A', prevClose: 0,
             };
         }
-        const lastDataPoint = chartData.at(-1);
-        const secondLastDataPoint = chartData.at(-2);
+        const lastDataPoint = chartData[chartData.length - 1];
+        const secondLastDataPoint = chartData[chartData.length - 2];
 
         return {
             open: lastDataPoint?.open,
@@ -212,7 +215,7 @@ export function StockChartCard() {
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-             <CardDescription>Market Summary &gt; {selectedStock.name}</CardDescription>
+             <div className="text-sm text-muted-foreground">Market Summary &gt; {selectedStock.name}</div>
              <div className="flex items-end gap-2 mt-1">
                 <p className="text-3xl font-bold">${price.toFixed(2)}</p>
                 <p className={`text-lg font-semibold ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
