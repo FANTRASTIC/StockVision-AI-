@@ -96,83 +96,67 @@ const calculateMACD = (data: any[], shortPeriod = 12, longPeriod = 26, signalPer
     }));
 };
 
-const processTimeSeries = (timeSeries: Record<string, any>) => {
-    const data = Object.keys(timeSeries).map(date => {
-        const dayData = timeSeries[date];
-        return {
-            date: date,
-            open: parseFloat(dayData['1. open']),
-            high: parseFloat(dayData['2. high']),
-            low: parseFloat(dayData['3. low']),
-            close: parseFloat(dayData['4. close']),
-            volume: parseInt(dayData['5. volume'], 10)
-        };
-    }).reverse();
+function mapYahooData(data: any) {
+    const timestamps = data?.chart?.result?.[0]?.timestamp;
+    const quotes = data?.chart?.result?.[0]?.indicators?.quote?.[0];
 
-    const withRSI = calculateRSI(data);
+    if (!timestamps || !quotes) {
+        return [];
+    }
+
+    return timestamps.map((ts: number, i: number) => ({
+        date: new Date(ts * 1000).toISOString().slice(0, 10),
+        open: quotes.open[i],
+        high: quotes.high[i],
+        low: quotes.low[i],
+        close: quotes.close[i],
+        volume: quotes.volume[i],
+    }));
+}
+
+const processYahooData = (yahooData: any[]) => {
+    const withRSI = calculateRSI(yahooData);
     const withMACD = calculateMACD(withRSI);
-    
     return withMACD;
 };
 
 export async function GET(req: NextRequest, { params }: { params: { ticker: string } }) {
   const ticker = params.ticker;
-  const { searchParams } = new URL(req.url);
-  const range = searchParams.get("range") || '1M';
-  const isIntraday = ['1D', '5D'].includes(range);
-  const interval = '5min';
-
+  
   if (!ticker) {
     return new Response(JSON.stringify({ error: "Ticker symbol is required" }), { status: 400 });
   }
   
-  const cacheKey = `${ticker.toUpperCase()}_${range}`;
+  const cacheKey = `${ticker.toUpperCase()}_YAHOO`;
   const cached = memoryCache.get(cacheKey);
   if (cached && Date.now() - cached.t < ONE_MIN) {
     return Response.json({ data: cached.data, fromCache: true });
   }
 
-  // const apiKey = process.env.ALPHAVANTAGE_API_KEY;
-  const apiKey = 'RK8GMH0UOXGXNHQ4'; // TEMPORARY: Hardcoded for debugging
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: "API key is not configured on the server" }), { status: 500 });
-  }
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?region=US&lang=en-US&includePrePost=false&interval=1d&useYfid=true&range=5y&corsDomain=finance.yahoo.com&.tsrc=finance`;
 
-  const getApiUrl = () => {
-    if (isIntraday) {
-      return `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${ticker}&interval=${interval}&outputsize=full&apikey=${apiKey}`;
-    }
-    const outputsize = ['1M'].includes(range) ? 'compact' : 'full';
-    return `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${ticker}&outputsize=${outputsize}&apikey=${apiKey}`;
-  };
-
-  const apiUrl = getApiUrl();
-  
   try {
-    const response = await fetch(apiUrl, { next: { revalidate: 0 } });
-    if (!response.ok) {
-        throw new Error(`Alpha Vantage API request failed with status: ${response.status}`);
-    }
-    const json = await response.json();
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+    });
 
-    if (json.Note) {
-      return Response.json({ ok: false, error: "rate_limit", detail: json.Note }, { status: 429 });
+    if (!response.ok) {
+       throw new Error(`Yahoo API responded with status: ${response.status}`);
     }
-    if (json["Error Message"] || json.Information) {
-      return Response.json(
-        { ok: false, error: "api_error", detail: json["Error Message"] || json.Information },
-        { status: 400 }
-      );
+
+    const json = await response.json();
+    
+    if (json?.chart?.error) {
+        throw new Error(json.chart.error.description || 'Yahoo API error');
     }
     
-    const seriesKey = Object.keys(json).find(k => k.toLowerCase().includes('time series'));
-    if (!seriesKey || !json[seriesKey]) {
-        return Response.json({ ok: false, error: "no_series", detail: "No time series data found in the response from Alpha Vantage." }, { status: 502 });
-    }
-
-    const combinedData = processTimeSeries(json[seriesKey]);
-    memoryCache.set(cacheKey, { t: Date.now(), data: combinedData });
-    return Response.json({ data: combinedData });
+    const mappedData = mapYahooData(json);
+    const processedData = processYahooData(mappedData);
+    
+    memoryCache.set(cacheKey, { t: Date.now(), data: processedData });
+    return Response.json({ data: processedData });
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
