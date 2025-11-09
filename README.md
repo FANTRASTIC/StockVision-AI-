@@ -2,7 +2,7 @@
 
 **An AI-Powered Stock Analysis and Paper Trading Platform built with Next.js and Genkit.**
 
-![StockWise AI Dashboard Mockup](https://picsum.photos/seed/stockwise-dashboard/1200/630)
+![StockWise AI Dashboard Mockup](https://picsum.photos/seed/app-preview/1200/630)
 
 StockWise AI is a modern, web-based platform designed to provide users with powerful tools for stock market analysis and virtual trading. It leverages generative AI to offer predictive insights, risk management recommendations, and real-time market sentiment analysis, all within a sleek and intuitive user interface.
 
