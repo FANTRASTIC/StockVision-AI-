@@ -24,7 +24,6 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { cn, toNum } from '@/lib/utils';
-import { getDailyStockData } from '@/lib/services/alpha-vantage';
 
 type CombinedData = {
     date: string;
@@ -62,10 +61,9 @@ const timeRanges = ['1D', '5D', '1M', '6M', 'YTD', '1Y', '5Y', 'Max'];
 interface StockChartCardProps {
     selectedTicker: string;
     onTickerSelect: (ticker: string) => void;
-    onPriceUpdate: (ticker: string, newPrice: number) => void;
 }
 
-export function StockChartCard({ selectedTicker, onTickerSelect, onPriceUpdate }: StockChartCardProps) {
+export function StockChartCard({ selectedTicker, onTickerSelect }: StockChartCardProps) {
     const [chartData, setChartData] = useState<CombinedData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
@@ -85,11 +83,15 @@ export function StockChartCard({ selectedTicker, onTickerSelect, onPriceUpdate }
         setApiError(null);
         setChartData([]); // Clear previous data
         try {
-            const data = await getDailyStockData(ticker, range);
-            if (data && data.length > 0) {
-              setChartData(data);
-              const latestPrice = data[data.length - 1].close;
-              onPriceUpdate(ticker, latestPrice);
+             const response = await fetch(`/api/stock/${ticker}?range=${range}`);
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: "Failed to parse error from server" }));
+                throw new Error(errorData.detail || `Failed to fetch data for ${ticker}`);
+            }
+            const result = await response.json();
+
+            if (result.data && result.data.length > 0) {
+              setChartData(result.data);
             } else {
                throw new Error('No data received from API.');
             }
@@ -104,7 +106,7 @@ export function StockChartCard({ selectedTicker, onTickerSelect, onPriceUpdate }
         } finally {
             setIsLoading(false);
         }
-    }, [toast, onPriceUpdate]);
+    }, [toast]);
 
 
     useEffect(() => {

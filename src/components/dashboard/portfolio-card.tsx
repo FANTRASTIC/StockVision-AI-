@@ -15,72 +15,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { type PortfolioHolding } from '@/lib/data';
-import { useState, useEffect } from 'react';
-import { toNum } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { portfolioHoldings } from '@/lib/data';
 
-// Simple pseudo-random number generator
-const seededRandom = (seed: number) => {
-  let s = Math.sin(seed) * 10000;
-  return s - Math.floor(s);
-};
+const fmt = (n: number, d = 2) =>
+  n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-const generateDayGains = (holdings: PortfolioHolding[]) => {
-    return holdings.map((holding, index) => {
-        const seed = index + 1; // Simple seed based on index
-        const price = toNum(holding.currentPrice);
-        const shares = toNum(holding.shares);
-        // Use a smaller random factor for more realistic daily changes
-        const dayGain = (seededRandom(seed) - 0.45) * (price * 0.05) * shares;
-        const marketValue = shares * price;
-        const dayGainPercent = (marketValue - dayGain) !== 0 ? (dayGain / (marketValue - dayGain)) * 100 : 0;
-        return {
-            dayGain,
-            dayGainPercent
-        };
-    });
-};
-
-interface PortfolioCardProps {
-    holdings: PortfolioHolding[];
-}
-
-export function PortfolioCard({ holdings }: PortfolioCardProps) {
-  const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>([]);
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    // This effect runs only on the client, after the initial render.
-    // This prevents hydration mismatch.
-    setIsClient(true);
-    if (holdings && holdings.length > 0) {
-        setDayGains(generateDayGains(holdings));
-    }
-  }, [holdings]);
-
-  const totalValue = holdings.reduce((acc, holding) => acc + toNum(holding.shares) * toNum(holding.currentPrice), 0);
-  const totalCost = holdings.reduce((acc, holding) => acc + toNum(holding.shares) * toNum(holding.avgCost), 0);
+export function PortfolioCard() {
+  const totalValue = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.currentPrice, 0);
+  const totalCost = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.avgCost, 0);
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = totalCost !== 0 ? (totalGainLoss / totalCost) * 100 : 0;
-
-  if (!isClient) {
-      return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline">Paper Trading Portfolio</CardTitle>
-                <CardDescription>Your virtual holdings with real-time data.</CardDescription>
-            </CardHeader>
-            <CardContent className="h-[300px] flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </CardContent>
-        </Card>
-      )
-  }
-
-  const fmt = (n: number, d = 2) =>
-    n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-
+  
   return (
     <Card>
       <CardHeader>
@@ -111,16 +56,12 @@ export function PortfolioCard({ holdings }: PortfolioCardProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {holdings.map((holding, index) => {
-              const shares = toNum(holding.shares);
-              const price = toNum(holding.currentPrice);
-              const avgCost = toNum(holding.avgCost);
-              
-              const marketValue = shares * price;
-              const totalGain = marketValue - shares * avgCost;
-              const costBasis = shares * avgCost;
-              const gainPercent = costBasis !== 0 ? (totalGain / costBasis) * 100 : 0;
-              const {dayGain, dayGainPercent} = dayGains[index] || { dayGain: 0, dayGainPercent: 0};
+            {portfolioHoldings.map((holding) => {
+              const marketValue = holding.shares * holding.currentPrice;
+              const dayGain = (Math.random() - 0.45) * holding.currentPrice * holding.shares * 0.05;
+              const dayGainPercent = (dayGain / (marketValue-dayGain)) * 100;
+              const totalGain = marketValue - (holding.shares * holding.avgCost);
+              const gainPercent = (totalGain / (holding.shares * holding.avgCost)) * 100;
 
               return (
                 <TableRow key={holding.ticker}>
@@ -128,8 +69,8 @@ export function PortfolioCard({ holdings }: PortfolioCardProps) {
                     <div className="font-bold">{holding.ticker}</div>
                     <div className="text-xs text-muted-foreground">{holding.name}</div>
                   </TableCell>
-                  <TableCell className="text-right">{fmt(shares)}</TableCell>
-                  <TableCell className="text-right">${fmt(price)}</TableCell>
+                  <TableCell className="text-right">{fmt(holding.shares)}</TableCell>
+                  <TableCell className="text-right">${fmt(holding.currentPrice)}</TableCell>
                   <TableCell className="text-right">${fmt(marketValue)}</TableCell>
                   <TableCell className={`text-right ${dayGain >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     <div>{dayGain >= 0 ? '+' : ''}${fmt(dayGain)}</div>

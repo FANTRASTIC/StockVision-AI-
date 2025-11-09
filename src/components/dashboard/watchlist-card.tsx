@@ -28,13 +28,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { WatchlistItem } from '@/lib/data';
+import { watchlist, type WatchlistItem } from '@/lib/data';
 
-interface WatchlistCardProps {
-    watchlist: WatchlistItem[];
-}
-
-export function WatchlistCard({ watchlist }: WatchlistCardProps) {
+export function WatchlistCard() {
   const [isAlertDialogOpen, setAlertDialogOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<WatchlistItem | null>(null);
   const { toast } = useToast();
