@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 
 export const metadata: Metadata = {
@@ -28,7 +29,7 @@ export default function RootLayout({
       </head>
       <body className={cn('font-body antialiased')}>
         <TooltipProvider>
-            {children}
+          <SidebarProvider>{children}</SidebarProvider>
         </TooltipProvider>
         <Toaster />
       </body>

@@ -1,7 +1,7 @@
 
 'use client';
 import { useState } from 'react';
-import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
+import { Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { StockChartCard } from '@/components/dashboard/stock-chart-card';
@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const [selectedTicker, setSelectedTicker] = useState(allStocks[0].ticker);
 
   return (
-    <SidebarProvider>
+    <>
       <Sidebar>
         <SidebarNav />
       </Sidebar>
@@ -42,6 +42,6 @@ export default function DashboardPage() {
             <WatchlistCard />
         </main>
       </SidebarInset>
-    </SidebarProvider>
+    </>
   );
 }

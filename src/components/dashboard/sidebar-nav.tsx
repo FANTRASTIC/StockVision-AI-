@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sidebar,
@@ -18,8 +19,11 @@ import {
   Bell,
   Bot,
 } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 export function SidebarNav() {
+  const pathname = usePathname();
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -33,33 +37,49 @@ export function SidebarNav() {
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Dashboard"
-              href="#"
-              isActive
+              href="/"
+              isActive={pathname === '/'}
             >
               <Home />
               <span>Dashboard</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Portfolio" href="#">
+            <SidebarMenuButton 
+              tooltip="Portfolio" 
+              href="/portfolio"
+              isActive={pathname === '/portfolio'}
+            >
               <Wallet />
               <span>Portfolio</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="AI Tools" href="#">
+            <SidebarMenuButton 
+              tooltip="AI Tools" 
+              href="/ai-tools"
+              isActive={pathname === '/ai-tools'}
+            >
               <Bot />
               <span>AI Tools</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Charts" href="#">
+            <SidebarMenuButton 
+              tooltip="Charts" 
+              href="/charts"
+              isActive={pathname === '/charts'}
+            >
               <BarChart2 />
               <span>Charts</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Alerts" href="#">
+            <SidebarMenuButton 
+              tooltip="Alerts" 
+              href="/alerts"
+              isActive={pathname === '/alerts'}
+            >
               <Bell />
               <span>Alerts</span>
             </SidebarMenuButton>
