@@ -1,5 +1,6 @@
 
 'use client';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -15,14 +16,29 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { portfolioHoldings } from '@/lib/data';
+import { portfolioHoldings as initialHoldings, type PortfolioHolding } from '@/lib/data';
 
 const fmt = (n: number, d = 2) =>
   n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 
+type HoldingWithGain = PortfolioHolding & { dayGain: number };
+
 export function PortfolioCard() {
-  const totalValue = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.currentPrice, 0);
-  const totalCost = portfolioHoldings.reduce((acc, holding) => acc + holding.shares * holding.avgCost, 0);
+  const [holdings, setHoldings] = useState<HoldingWithGain[]>([]);
+
+  useEffect(() => {
+    // This code now runs only on the client, after the initial render.
+    // This avoids the hydration mismatch.
+    const holdingsWithGains = initialHoldings.map(holding => {
+        const marketValue = holding.shares * holding.currentPrice;
+        const dayGain = (Math.random() - 0.45) * marketValue * 0.05;
+        return { ...holding, dayGain };
+    });
+    setHoldings(holdingsWithGains);
+  }, []);
+
+  const totalValue = initialHoldings.reduce((acc, holding) => acc + holding.shares * holding.currentPrice, 0);
+  const totalCost = initialHoldings.reduce((acc, holding) => acc + holding.shares * holding.avgCost, 0);
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = totalCost !== 0 ? (totalGainLoss / totalCost) * 100 : 0;
   
@@ -56,9 +72,9 @@ export function PortfolioCard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {portfolioHoldings.map((holding) => {
+            {holdings.map((holding) => {
               const marketValue = holding.shares * holding.currentPrice;
-              const dayGain = (Math.random() - 0.45) * holding.currentPrice * holding.shares * 0.05;
+              const { dayGain } = holding;
               const dayGainPercent = (dayGain / (marketValue-dayGain)) * 100;
               const totalGain = marketValue - (holding.shares * holding.avgCost);
               const gainPercent = (totalGain / (holding.shares * holding.avgCost)) * 100;
