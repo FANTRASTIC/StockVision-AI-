@@ -18,6 +18,7 @@ import {
 import { type PortfolioHolding } from '@/lib/data';
 import { useState, useEffect } from 'react';
 import { toNum } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 // Simple pseudo-random number generator to ensure consistency between server and client
 const seededRandom = (seed: number) => {
@@ -48,10 +49,14 @@ interface PortfolioCardProps {
 
 export function PortfolioCard({ holdings }: PortfolioCardProps) {
   const [dayGains, setDayGains] = useState<{dayGain: number, dayGainPercent: number}[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Generate on client to avoid hydration mismatch and re-generate when holdings change
-    setDayGains(generateDayGains(holdings));
+    if (holdings && holdings.length > 0) {
+        // Generate on client to avoid hydration mismatch and re-generate when holdings change
+        setDayGains(generateDayGains(holdings));
+        setIsLoading(false);
+    }
   }, [holdings]);
 
   const totalValue = holdings.reduce((acc, holding) => acc + toNum(holding.shares) * toNum(holding.currentPrice), 0);
@@ -59,15 +64,15 @@ export function PortfolioCard({ holdings }: PortfolioCardProps) {
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = totalCost !== 0 ? (totalGainLoss / totalCost) * 100 : 0;
 
-  if (dayGains.length === 0) {
+  if (isLoading) {
       return (
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline">Paper Trading Portfolio</CardTitle>
                 <CardDescription>Your virtual holdings with real-time data.</CardDescription>
             </CardHeader>
-            <CardContent>
-                <p>Loading portfolio...</p>
+            <CardContent className="h-[300px] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </CardContent>
         </Card>
       )
